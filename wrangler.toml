@@ -7,7 +7,7 @@ compatibility_date = "2024-01-01"
 # Depois substitui <KV_NAMESPACE_ID> pelo ID real
 [[kv_namespaces]]
 binding = "MEDIA"
-id = "<KV_NAMESPACE_ID>"
+id = "7500c3787e0a4b68822c5e2b7851543e"
 
 # Variáveis de ambiente opcionais (sem segredos — esses vão via dashboard ou wrangler secret)
 # Descomenta e ajusta conforme necessário:
