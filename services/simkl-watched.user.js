@@ -1,9 +1,8 @@
 // ==UserScript==
 // @name         Simkl Watched Overlay
 // @namespace    https://github.com/Blackspirits/media-sync
-// @version      1.0.0
-// @description  Sobrepõe badge "Visto" do Simkl em FilmTwist e Filmin. OAuth via PIN, matching
-//               por título+ano, override manual de ID Simkl por item.
+// @version      1.0.3
+// @description  Sobrepõe badge "Visto" do Simkl em FilmTwist e Filmin. OAuth via PIN, matching por título+ano, override manual de ID Simkl por item.
 // @author       Blackspirits
 // @match        https://www.filmtwist.pt/*
 // @match        https://filmtwist.pt/*
@@ -24,6 +23,17 @@
 const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
 
 /* ───────────────────────────── changelog ──────────────────────────────────
+ * v1.0.3 — Filmin: botão Simkl injeta-se na linha de controlos do card
+ *             (.card-options-controls, ao lado do ↓⏱♥ GUARDA) com ícone
+ *             nativo; check verde se visto, escudo cinza hover-only se não;
+ *             FilmTwist mantém overlay no poster.
+ * v1.0.2 — Botão Simkl injeta-se no painel Filmin/FilmTwist (ao lado do
+ *             "Guardar catálogo") em vez de botão flutuante isolado;
+ *             fallback para botão flutuante se painel ainda não existir;
+ *             MutationObserver reinjecta se o painel for recriado.
+ * v1.0.1 — Fix login: requestPin era POST → deve ser GET; pollPin robusto
+ *             (lida com 200 sem token, regex em "Pending"); erros mostrados
+ *             no toast com detalhe; console.log de debug em todas as fases.
  * v1.0.0 — Script inicial: PIN OAuth (sem redirect URI, funciona em userscripts);
  *           sync completo de /sync/all-items/movies,shows; matching por título+ano;
  *           override manual de ID Simkl por item (UI contextual no hover);
@@ -142,8 +152,15 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
     //  OAUTH — PIN DEVICE FLOW (sem redirect URI, funciona em userscripts)
     // ════════════════════════════════════════════════════════════════════════
     async function requestPin() {
-        const r = await gmFetch(`${API}/oauth/pin?client_id=${SIMKL_CLIENT_ID}`, { method: "POST", body: {} });
-        if (r.status !== 200 || !r.data?.user_code) throw new Error("Erro ao obter PIN");
+        // Simkl PIN device flow: GET /oauth/pin?client_id=xxx
+        const r = await gmFetch(`${API}/oauth/pin?client_id=${SIMKL_CLIENT_ID}`);
+        console.log("[Simkl] requestPin →", r.status, JSON.stringify(r.data));
+        if (r.status !== 200) {
+            throw new Error(`Erro ao obter PIN (HTTP ${r.status}): ${JSON.stringify(r.data)}`);
+        }
+        if (!r.data?.user_code) {
+            throw new Error(`Resposta inesperada: ${JSON.stringify(r.data)}`);
+        }
         return r.data; // { user_code, verification_url, expires_in, interval }
     }
 
@@ -151,9 +168,28 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
         for (let i = 0; i < maxAttempts; i++) {
             await new Promise(r => setTimeout(r, intervalSec * 1000));
             const r = await gmFetch(`${API}/oauth/pin/${userCode}?client_id=${SIMKL_CLIENT_ID}`);
-            if (r.status === 200 && r.data?.access_token) return r.data.access_token;
-            if (r.status !== 400) break; // erro inesperado
-            // 400 = authorization_pending → continua a polling
+            console.log(`[Simkl] pollPin (${i+1}/${maxAttempts}) → HTTP ${r.status}`, JSON.stringify(r.data));
+            // Update modal status if visible
+            const statusEl = document.getElementById("simkl-pin-status");
+            if (statusEl) statusEl.textContent = `A verificar... (tentativa ${i+1}/${maxAttempts})`;
+
+            if (r.status === 200 && r.data?.access_token) {
+                return r.data.access_token; // ✓ autorizado
+            }
+            if (r.status === 200 && !r.data?.access_token) {
+                continue; // 200 mas ainda sem token → continua
+            }
+            if (r.status === 400) {
+                // Simkl devolve 400 com {"result":"error","message":"Pending"} enquanto aguarda
+                const msg = r.data?.message || r.data?.error || "";
+                if (/pending|wait|authorization/i.test(msg) || !msg) continue;
+                // Se for outro erro 400, para
+                console.warn("[Simkl] pollPin erro 400:", msg);
+                break;
+            }
+            // Qualquer outro status (401, 404, 500...) = erro real
+            console.error("[Simkl] pollPin erro inesperado:", r.status, r.data);
+            break;
         }
         return null;
     }
@@ -175,8 +211,11 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
             toast("✓ Simkl conectado com sucesso!");
             return true;
         } catch (e) {
-            console.error("[Simkl]", e);
-            toast("Erro na autenticação: " + e.message);
+            closePinModal();
+            console.error("[Simkl] login error:", e);
+            // Show detailed error in toast
+            const msg = e.message || String(e);
+            toast(`Erro Simkl: ${msg.length > 80 ? msg.slice(0,80)+"…" : msg}`);
             return false;
         }
     }
@@ -215,6 +254,7 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
                     box-shadow:0 0 6px ${BRAND};display:inline-block;animation:simklPulse 1.5s infinite;"></span>
                 A aguardar autorização...
             </div>
+            <div id="simkl-pin-status" style="font-size:11px;color:#475569;margin-top:8px;min-height:16px;"></div>
         </div>
         <style>@keyframes simklPulse{0%,100%{opacity:1}50%{opacity:.3}}</style>`;
         document.body.appendChild(m);
@@ -388,23 +428,21 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
      * Retorna { title, year, url, root }
      */
     function extractCardData(el) {
-        // FilmTwist: article com link href /filme/ ou /serie/
-        // Filmin: .card com link href /filme/ ou /serie/
         const link = el.querySelector("a[href*='/filme/'], a[href*='/serie/'], a[href*='/curta/']");
         if (!link) return null;
-        const url   = link.href;
-        const title = (el.querySelector("img")?.alt || el.querySelector("[title]")?.title ||
-                       el.querySelector("h3,h2,.title,.card-title")?.textContent || "").trim();
-        const year  = (el.querySelector(".year,.card-year")?.textContent || "").match(/\d{4}/)?.[0] || "";
-        return { title, year, url, root: el };
+        const url      = link.href;
+        const title    = (el.querySelector("img")?.alt || el.querySelector("[title]")?.title ||
+                          el.querySelector("h3,h2,.title,.card-title")?.textContent || "").trim();
+        const year     = (el.querySelector(".year,.card-year,.card-options-info-heading span")
+                          ?.textContent || "").match(/\d{4}/)?.[0] || "";
+        // Filmin inline controls row (where ↓ ⏱ ♥ GUARDA live)
+        const controls = el.querySelector(".card-options-controls");
+        return { title, year, url, root: el, controls };
     }
 
-    /** Injeta overlay num card */
+    /** Injeta overlay/botão num card */
     function applyBadgeToCard(el) {
         if (!isEnabled || !el) return;
-        // garante position:relative no root
-        const pos = getComputedStyle(el).position;
-        if (pos === "static") el.style.position = "relative";
 
         const data = extractCardData(el);
         if (!data || !data.title) return;
@@ -412,29 +450,75 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
         const overrideKey = `${normalizeTitle(data.title)}|${data.year}`;
         const found = findInWatched(data.title, data.year, overrideKey);
 
-        // Remove badge anterior se existir
-        el.querySelector(".simkl-badge")?.remove();
-        el.querySelector(".simkl-badge-edit")?.remove();
+        // Remove elementos anteriores
+        el.querySelectorAll(".simkl-badge,.simkl-badge-edit,.simkl-ctrl-btn").forEach(b => b.remove());
 
-        if (found) {
-            // Badge "visto"
-            const badge = document.createElement("div");
-            badge.className = "simkl-badge";
-            badge.title = `Visto no Simkl: ${found.title} (${found.year || "?"})`;
-            badge.innerHTML = SVG_CHECK;
-            el.appendChild(badge);
+        if (IS_FM && data.controls) {
+            // ── FILMIN: injeta botão na linha de controlos do card ─────────────
+            // Botão estilo nativo Filmin (mesmo visual que ↓ ⏱ ♥)
+            const ctrlBtn = document.createElement("span");
+            ctrlBtn.className = "c-button c-button--sm c-button--text simkl-ctrl-btn";
+            ctrlBtn.role = "button";
+            ctrlBtn.style.cssText = "cursor:pointer;flex-shrink:0;";
+
+            if (found) {
+                // Visto — ícone check verde
+                ctrlBtn.title = `Simkl: visto (${found.title}${found.year ? " · "+found.year : ""}) — Clica para corrigir`;
+                ctrlBtn.innerHTML = `<svg class="o-svg-icon icon--sm c-button__icon" viewBox="0 0 24 24" fill="none"
+                    stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    <polyline points="9 12 11 14 15 10" stroke="#22c55e" stroke-width="2.5"/>
+                </svg>`;
+            } else {
+                // Não visto — ícone escudo cinza, só aparece no hover
+                ctrlBtn.title = `Simkl: não visto — Clica para definir ID manualmente`;
+                ctrlBtn.style.opacity = "0";
+                ctrlBtn.style.transition = "opacity .15s";
+                // Mostrar no hover do card
+                el.addEventListener("mouseenter", () => { ctrlBtn.style.opacity = "1"; }, { passive: true });
+                el.addEventListener("mouseleave", () => { ctrlBtn.style.opacity = "0"; }, { passive: true });
+                ctrlBtn.innerHTML = `<svg class="o-svg-icon icon--sm c-button__icon" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.45;">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>`;
+            }
+
+            ctrlBtn.addEventListener("mousedown", e => e.preventDefault());
+            ctrlBtn.addEventListener("click", (e) => {
+                e.preventDefault(); e.stopPropagation();
+                openOverrideModal(data.title, data.year, overrideKey, found);
+            });
+
+            // Inserir antes do botão GUARDA (último elemento) ou no fim
+            const guardarBtn = data.controls.querySelector('[aria-label*="guarda" i],[aria-label*="save" i],[class*="guarda" i]')
+                            || data.controls.lastElementChild;
+            if (guardarBtn) guardarBtn.insertAdjacentElement("beforebegin", ctrlBtn);
+            else data.controls.appendChild(ctrlBtn);
+
+        } else {
+            // ── FILMTWIST (e fallback): overlay no poster ──────────────────────
+            const pos = getComputedStyle(el).position;
+            if (pos === "static") el.style.position = "relative";
+
+            if (found) {
+                const badge = document.createElement("div");
+                badge.className = "simkl-badge";
+                badge.title = `Simkl: visto (${found.title}${found.year ? " · "+found.year : ""})`;
+                badge.innerHTML = SVG_CHECK;
+                el.appendChild(badge);
+            }
+
+            // Botão editar — hover-only
+            const editBtn = document.createElement("div");
+            editBtn.className = "simkl-badge-edit";
+            editBtn.title = "Simkl: definir ID manualmente";
+            editBtn.innerHTML = SVG_EDIT;
+            editBtn.addEventListener("click", (e) => {
+                e.preventDefault(); e.stopPropagation();
+                openOverrideModal(data.title, data.year, overrideKey, found);
+            });
+            el.appendChild(editBtn);
         }
-
-        // Botão editar (aparece sempre no hover para poder definir/corrigir ID)
-        const editBtn = document.createElement("div");
-        editBtn.className = "simkl-badge-edit";
-        editBtn.title = "Definir ID Simkl manualmente";
-        editBtn.innerHTML = SVG_EDIT;
-        editBtn.addEventListener("click", (e) => {
-            e.preventDefault(); e.stopPropagation();
-            openOverrideModal(data.title, data.year, overrideKey, found);
-        });
-        el.appendChild(editBtn);
     }
 
     /** Percorre todos os cards visíveis e aplica overlays */
@@ -619,29 +703,84 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    //  PAINEL DE SETTINGS (botão flutuante pequeno no canto)
+    //  INTEGRAÇÃO NO PAINEL DO SCRIPT DE CATÁLOGO
+    //  Injeta botão "Simkl Watched" no painel Filmin/FilmTwist em vez de
+    //  botão flutuante isolado no canto.
     // ════════════════════════════════════════════════════════════════════════
-    function injectPanel() {
-        if (document.getElementById(PANEL_ID)) return;
 
+    /** SVG escudo para o botão Simkl */
+    const SIMKL_SHIELD_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`;
+
+    /** Cria o botão Simkl que abre o painel de settings */
+    function createSimklPanelButton(accentColor) {
+        const token = GM_getValue(STORE_TOKEN, null);
+        const connected = !!token;
+        const btn = document.createElement("button");
+        btn.id = "simkl-panel-btn";
+        btn.type = "button";
+        btn.innerHTML = `<span style="display:inline-flex;align-items:center;gap:7px;">${SIMKL_SHIELD_SVG}<span>Simkl Watched</span></span>`;
+        btn.title = connected ? "Simkl: autenticado" : "Simkl: não ligado";
+        btn.style.cssText = `
+            padding:10px 12px;border-radius:10px;width:100%;text-align:left;
+            background:rgba(255,255,255,.05);
+            color:${connected ? "#86efac" : "#94a3b8"};
+            border:1px solid rgba(255,255,255,.08);
+            border-left:2px solid ${connected ? "rgba(34,197,94,.7)" : "rgba(100,116,139,.5)"};
+            cursor:pointer;font-size:12.5px;font-family:inherit;font-weight:500;
+            letter-spacing:0.01em;transition:background .15s,border-color .15s,color .15s;`;
+        btn.addEventListener("mouseover", () => {
+            btn.style.background = "rgba(255,255,255,.09)";
+            btn.style.borderLeftColor = connected ? "rgba(34,197,94,.9)" : "rgba(100,116,139,.8)";
+        });
+        btn.addEventListener("mouseout", () => {
+            btn.style.background = "rgba(255,255,255,.05)";
+            btn.style.borderLeftColor = connected ? "rgba(34,197,94,.7)" : "rgba(100,116,139,.5)";
+        });
+        btn.addEventListener("click", (e) => { e.stopPropagation(); toggleSettingsPanel(); });
+        return btn;
+    }
+
+    /** Tenta injetar o botão no painel do script de catálogo */
+    function injectPanel() {
+        if (document.getElementById("simkl-panel-btn")) return;
+
+        // Filmin: painel #bs-filmin-panel → body com flex
+        const filminBody = document.querySelector("#bs-filmin-panel > div:last-child");
+        if (filminBody && filminBody.style.flexDirection !== undefined) {
+            // Inserir antes do último botão (dashboard)
+            const btn = createSimklPanelButton("#00e0a4");
+            btn.style.flex = "1";
+            const lastChild = filminBody.lastElementChild;
+            filminBody.insertBefore(btn, lastChild);
+            return;
+        }
+
+        // FilmTwist: painel #ft-panel → body com flex
+        const ftBody = document.querySelector("#ft-panel > div:last-child");
+        if (ftBody) {
+            const btn = createSimklPanelButton("#dc2626");
+            btn.style.flex = "1";
+            const lastChild = ftBody.lastElementChild;
+            ftBody.insertBefore(btn, lastChild);
+            return;
+        }
+
+        // Fallback: botão flutuante no canto (se nenhum painel encontrado ainda)
+        if (document.getElementById(PANEL_ID)) return;
         const panel = document.createElement("div");
         panel.id = PANEL_ID;
-        panel.style.cssText = `position:fixed;bottom:20px;left:20px;z-index:1999999;font-family:system-ui,sans-serif;`;
-
-        // Botão trigger
+        panel.style.cssText = "position:fixed;bottom:20px;left:20px;z-index:1999999;";
+        const token = GM_getValue(STORE_TOKEN, null);
         const trigger = document.createElement("button");
         trigger.id = "simkl-trigger";
-        const token = GM_getValue(STORE_TOKEN, null);
-        trigger.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`;
+        trigger.innerHTML = SIMKL_SHIELD_SVG;
         trigger.title = "Simkl Watched";
         trigger.style.cssText = `width:36px;height:36px;border-radius:50%;background:rgba(10,14,22,.9);
-            border:1px solid ${token ? "#22c55e" : "rgba(255,255,255,.15)"};color:${token ? "#22c55e" : "#64748b"};
+            border:1px solid ${token ? "#22c55e" : "rgba(255,255,255,.15)"};
+            color:${token ? "#22c55e" : "#64748b"};
             cursor:pointer;display:flex;align-items:center;justify-content:center;
             box-shadow:0 4px 12px rgba(0,0,0,.5);transition:all .2s;`;
-        trigger.onmouseenter = () => { trigger.style.transform = "scale(1.1)"; };
-        trigger.onmouseleave = () => { trigger.style.transform = ""; };
         trigger.addEventListener("click", () => toggleSettingsPanel());
-
         panel.appendChild(trigger);
         document.body.appendChild(panel);
     }
@@ -761,6 +900,10 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
             clearTimeout(debounce);
             debounce = setTimeout(() => {
                 if (isEnabled && watchedSet.size > 0) applyOverlaysToPage();
+                // Reinjecta botão se o painel do script de catálogo foi recriado
+                if (!document.getElementById("simkl-panel-btn") && !document.getElementById(PANEL_ID)) {
+                    injectPanel();
+                }
             }, 400);
         });
         obs.observe(document.body, { childList: true, subtree: true });
