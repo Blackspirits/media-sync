@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Filmin.pt — Gestor de Catálogo, Downloads & Sync Cloud
 // @namespace    blackspirits.github.io/
-// @version      5.5.17
+// @version      5.5.18
 // @description  Conta e guarda filmes/séries (pagos e gratuitos), sincroniza com Cloudflare Workers (multi-API), gere downloads e copiados, e apresenta uma Dashboard com filtros, poster HD, notas de séries e exportação.
 // @author       BlackSpirits & Leinad4Mind
 // @license      MIT
@@ -19,6 +19,8 @@
 /*
  * CHANGELOG
  * ─────────────────────────────────────────────────────────────────────────────
+ * v5.5.18 — Badge ícone: inline style idêntico ao FilmTwist + SVG style forçado
+ *             (protege contra fill/stroke global do Filmin).
  * v5.5.17 — Badge ícone: classe CSS dedicada com !important para SVG (protege contra
  *             CSS global do Filmin que sobrepõe width/height inline).
  * v5.5.16 — Badge catálogo: estilo do ícone alinhado com FilmTwist (22×22px, cor #38bdf8).
@@ -1327,8 +1329,11 @@
 
             if (visuallyCatalog) {
                 const icon = document.createElement("div");
-                icon.className = "filmin-badge-icon";
+                icon.style.cssText = "background:rgba(0,0,0,0.65);color:#38bdf8;display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:4px;border:1px dashed rgba(14,165,233,0.6);flex-shrink:0;";
                 icon.title = "Presente no Histórico"; icon.innerHTML = ICONS.history;
+                // Force SVG not to be overridden by Filmin site CSS
+                const svgEl = icon.querySelector("svg");
+                if (svgEl) { svgEl.style.cssText = "width:13px;height:13px;min-width:13px;max-width:13px;fill:none;stroke:currentColor;flex-shrink:0;"; }
                 badge.appendChild(icon);
             }
             if (isSavedInCloud) {
