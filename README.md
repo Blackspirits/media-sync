@@ -10,9 +10,9 @@ Arquitetura: **1 Cloudflare Worker** (backend partilhado) + **1 userscript por s
 
 | Script | Versão |
 |---|---|
-| `services/filmin.user.js` | v5.5.17 |
+| `services/filmin.user.js` | v5.5.18 |
 | `services/filmtwist.user.js` | v1.8.1 |
-| `services/simkl-watched.user.js` | v1.0.0 |
+| `services/simkl-watched.user.js` | v1.0.3 |
 | `worker/worker.js` | v1.1.0 |
 
 ---
