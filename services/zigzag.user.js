@@ -689,54 +689,129 @@
 
     async function openDashboard() {
         const overlay = document.createElement('div');
-        overlay.style.cssText = "position:fixed;inset:0;background:#060c18;z-index:2000000;padding:40px;overflow-y:auto;color:white;font-family:system-ui,sans-serif;";
+        overlay.style.cssText = "position:fixed;inset:0;background:linear-gradient(to bottom, #0a0e17 0%, #030509 100%);z-index:2000000;padding:20px;overflow-y:auto;color:#e2e8f0;font-family:system-ui,sans-serif;";
         document.body.appendChild(overlay);
 
-        const items = getStored(STORE_CATALOG);
-        const selIds = getStored(STORE_SELECTED);
-        const locIds = getStored(STORE_LOCAL);
+        let items = getStored(STORE_CATALOG);
+        let selIds = getStored(STORE_SELECTED);
+        let locIds = getStored(STORE_LOCAL);
 
         const isSelected = (id) => selIds.includes(id);
         const isLocal = (id) => locIds.includes(id);
-        const close = () => overlay.remove();
 
-        const cardsHtml = await Promise.all(items.map(async item => {
-            const displayImg = await getCachedImageURL(item.poster) || item.poster;
-            const styleOpac = isLocal(item.id) ? 0.5 : 1;
+        const render = async () => {
+            const rootProgs = items.filter(i => !i.url.includes('/e'));
+            const epsOnly = items.filter(i => i.url.includes('/e'));
+            const localRoot = rootProgs.filter(i => locIds.includes(i.id)).length;
+            const localEps = epsOnly.filter(i => locIds.includes(i.id)).length;
 
-            let badges = '';
-            if (isLocal(item.id)) badges += `<div style="background:#3b82f6;color:white;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:bold;">COLEÇÃO</div>`;
-            if (isSelected(item.id)) badges += `<div style="background:#10b981;color:white;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:bold;">SELECIONADO</div>`;
+            const makeGlassCard = async (item) => {
+                const displayImg = await getCachedImageURL(item.poster) || item.poster;
+                const local = isLocal(item.id);
+                const isProg = !item.url.includes('/e');
 
-            return `
-            <div style="opacity:${styleOpac};background:#1e293b;border-radius:15px;overflow:hidden;border:1px solid #334155;transition:0.3s;position:relative;">
-                <div style="position:relative; aspect-ratio: 16/9; background: #000;">
-                    <img src="${displayImg}" style="width:100%;height:100%;object-fit:cover;">
-                    <div style="position:absolute; top:10px; right:10px; display:flex; gap:5px;">
-                        ${badges}
+                let badges = '';
+                if (local) badges += `<div style="background:rgba(59,130,246,0.2);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;backdrop-filter:blur(5px);box-shadow: 0 4px 10px rgba(0,0,0,0.5);">COLEÇÃO</div>`;
+                if (isSelected(item.id)) badges += `<div style="background:rgba(16,185,129,0.2);color:#34d399;border:1px solid rgba(16,185,129,0.3);padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;backdrop-filter:blur(5px);box-shadow: 0 4px 10px rgba(0,0,0,0.5);">SELECIONADO</div>`;
+
+                let actionBtn = local ? `<button class="zz-remove-item" data-id="${item.id}" title="Remover da coleção local" style="background:rgba(239, 68, 68, 0.9);color:white;border:none;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0.8;transition:0.3s;">✖</button>` : '';
+
+                return `
+                <div class="zz-dash-card" style="background:rgba(20,25,35,0.6);border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,0.05);transition:transform 0.3s, box-shadow 0.3s;box-shadow:0 8px 30px rgba(0,0,0,0.4);position:relative;display:flex;flex-direction:column;">
+                    <div style="position:relative; aspect-ratio: 16/9; background: #000; overflow:hidden;">
+                        <img src="${displayImg}" style="width:100%;height:100%;object-fit:cover;transition:0.5s;filter:${local ? 'brightness(1.1)' : 'brightness(0.6)'};">
+                        <div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(10,14,23,1) 0%, transparent 60%);"></div>
+                        <div style="position:absolute; top:12px; right:12px; display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
+                            <div style="display:flex; gap:6px;">${badges}</div>
+                            ${actionBtn}
+                        </div>
+                    </div>
+                    <div style="padding:18px; flex:1; display:flex; flex-direction:column; justify-content:space-between;background:rgba(20,25,35,0.8);backdrop-filter:blur(10px);">
+                        <div>
+                            <div style="font-size:15px;font-weight:800;margin-bottom:6px;line-height:1.2;color:#f8fafc;${local ? 'text-shadow:0 0 10px rgba(255,255,255,0.2);' : ''}">${item.title}</div>
+                            <div style="font-size:12px;color:#cbd5e1;font-weight:500;">${isProg ? 'Programa / Série' : 'Episódio'} • <span style="opacity:0.7;">${item.date || 'Zig Zag'}</span></div>
+                        </div>
+                        <a href="${item.url}" target="_blank" style="display:inline-block;margin-top:15px;color:#38bdf8;text-decoration:none;font-size:12px;font-weight:800;letter-spacing:0.5px;transition:0.2s;">VER NA RTP ↗</a>
+                    </div>
+                </div>`;
+            };
+
+            const cardsHtml = await Promise.all(items.map(makeGlassCard));
+
+            overlay.innerHTML = `
+                <div style="max-width:1400px;margin:0 auto;padding-top:20px;">
+                    <!-- HEADER GLASSMORPHISM -->
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:40px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);padding:20px 30px;border-radius:24px;backdrop-filter:blur(20px);box-shadow:0 20px 40px rgba(0,0,0,0.3);">
+                        <div>
+                            <h1 style="margin:0;font-size:28px;font-weight:900;background:linear-gradient(to right, #38bdf8, #818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;display:flex;align-items:center;gap:15px;">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                ZigZag Premium Manager
+                            </h1>
+                            <div style="color:#94a3b8;font-size:14px;margin-top:8px;font-weight:500;">Gestão global de multimédia local sincronizada na nuvem</div>
+                        </div>
+                        
+                        <div style="display:flex;gap:30px;align-items:center;">
+                            <!-- ESTATÍSTICAS -->
+                            <div style="display:flex;gap:20px;text-align:center;">
+                                <div>
+                                    <div style="font-size:24px;font-weight:900;color:#f8fafc;">${localRoot}<span style="font-size:14px;color:#475569;"> / ${rootProgs.length}</span></div>
+                                    <div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:1px;text-transform:uppercase;">Programas</div>
+                                </div>
+                                <div style="width:1px;background:rgba(255,255,255,0.1);"></div>
+                                <div>
+                                    <div style="font-size:24px;font-weight:900;color:#34d399;">${localEps}<span style="font-size:14px;color:#475569;"> / ${epsOnly.length}</span></div>
+                                    <div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:1px;text-transform:uppercase;">Episódios Locais</div>
+                                </div>
+                            </div>
+                            <!-- CLOSE BTN -->
+                            <button id="zz-dash-close" style="background:rgba(255,255,255,0.05);color:white;border:1px solid rgba(255,255,255,0.1);padding:14px 28px;border-radius:12px;cursor:pointer;font-weight:800;transition:0.3s;box-shadow:0 8px 20px rgba(0,0,0,0.2);">X FECHAR</button>
+                        </div>
+                    </div>
+
+                    <!-- CSS HOVERS -->
+                    <style>
+                        .zz-dash-card:hover { transform: translateY(-5px); box-shadow: 0 15px 40px rgba(56, 189, 248, 0.1) !important; border-color: rgba(56, 189, 248, 0.4) !important; }
+                        .zz-dash-card:hover img { transform: scale(1.05); }
+                        .zz-dash-card a:hover { color: #818cf8 !important; }
+                        .zz-remove-item:hover { background: #ef4444 !important; transform:scale(1.1); }
+                        #zz-dash-close:hover { background:rgba(239, 68, 68, 0.8) !important; border-color:rgba(239, 68, 68, 1) !important; }
+                    </style>
+
+                    <!-- GRID -->
+                    <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));gap:30px;padding-bottom:50px;">
+                        ${cardsHtml.join('')}
                     </div>
                 </div>
-                <div style="padding:15px;">
-                    <div style="font-size:14px;font-weight:bold;margin-bottom:5px;height:40px;overflow:hidden;color:#f1f5f9;">${item.title}</div>
-                    <div style="font-size:11px;color:#94a3b8;margin-bottom:10px;">${item.date || 'Zig Zag'}</div>
-                    <a href="${item.url}" target="_blank" style="color:${ACCENT_COLOR};text-decoration:none;font-size:12px;font-weight:bold;">▶ VER NA RTP</a>
-                </div>
-            </div>`;
-        }));
+            `;
 
-        overlay.innerHTML = `
-            <div style="max-width:1200px;margin:0 auto;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:30px;border-bottom:1px solid #1e293b;padding-bottom:20px;">
-                    <h2 style="display:flex;align-items:center;gap:10px;"><span style="color:${ACCENT_COLOR}">●</span> Biblioteca Zig Zag (${items.length})</h2>
-                    <button id="zz-dash-close" style="background:#ef4444;color:white;border:none;padding:10px 25px;border-radius:10px;cursor:pointer;font-weight:bold;">FECHAR</button>
-                </div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:25px;">
-                    ${cardsHtml.join('')}
-                </div>
-            </div>
-        `;
+            overlay.querySelector('#zz-dash-close').onclick = () => overlay.remove();
+            
+            // Add Remove Logic
+            overlay.querySelectorAll('.zz-remove-item').forEach(btn => {
+                btn.onclick = async (e) => {
+                    const id = e.target.getAttribute('data-id');
+                    
+                    // Remover a si próprio e aos filhos (se for programa) da STORE_LOCAL
+                    let currentLocal = getStored(STORE_LOCAL);
+                    const dependents = new Set();
+                    items.filter(child => child.parentId === id).forEach(child => {
+                        dependents.add(child.id);
+                        items.filter(sub => sub.url.startsWith(child.url) && sub.id !== child.id).forEach(sub => dependents.add(sub.id));
+                    });
+                    
+                    const depArray = Array.from(dependents);
+                    currentLocal = currentLocal.filter(i => i !== id && !depArray.includes(i));
+                    
+                    setStored(STORE_LOCAL, currentLocal);
+                    locIds = currentLocal; // atualiza estado interno p re-render
+                    
+                    saveToCloud(); highlightCards(); updateStats();
+                    render(); // Re-render imediato
+                }
+            });
+        };
 
-        overlay.querySelector('#zz-dash-close').onclick = close;
+        render();
     }
 
     /* =====================================================================
