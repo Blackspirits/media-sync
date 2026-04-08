@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FilmTwist.pt — Gestor de Catálogo, Downloads & Sync Cloud
 // @namespace    blackspirits.github.io/
-// @version      1.8.1
+// @version      1.8.2
 // @description  Conta e guarda filmes/curtas do FilmTwist.pt, sincroniza com Cloudflare Workers (multi-API), gere downloads e copiados, e apresenta uma Dashboard com filtros, posters, notas e exportação.
 // @author       BlackSpirits & Leinad4Mind
 // @license      MIT
@@ -19,6 +19,7 @@
 /*
  * CHANGELOG
  * ─────────────────────────────────────────────────────────────────────────────
+ * v1.8.2 — Revertido Badge catálogo para emoji 📜 (retrocesso a pedido).
  * v1.8.1 — Badge catálogo: emoji 📜 → ICONS.history SVG (consistente com Filmin).
  * v1.8.0 — Toasts: slide-in da direita com cubic-bezier, fade-out com animationend;
  *             ICONS{} library (Lucide SVG, sem dependências externas); makeButton
@@ -68,11 +69,11 @@
        CONSTANTES
        ===================================================================== */
 
-    const STORE_CATALOG       = "filmtwist_catalog";        // histórico visto/guardado
-    const STORE_DOWNLOADED    = "filmtwist_downloaded";     // transferidos definitivamente
+    const STORE_CATALOG = "filmtwist_catalog";        // histórico visto/guardado
+    const STORE_DOWNLOADED = "filmtwist_downloaded";     // transferidos definitivamente
     const STORE_DOWNLOAD_LIST = "filmtwist_download_list";  // copiados temporários
-    const STORE_EXTRA_FIELD   = "filmtwist_extra_field";    // notas de série
-    const STORE_API_CONFIGS   = "filmtwist_api_configs";    // configurações das APIs cloud
+    const STORE_EXTRA_FIELD = "filmtwist_extra_field";    // notas de série
+    const STORE_API_CONFIGS = "filmtwist_api_configs";    // configurações das APIs cloud
 
     const UI_POS_KEY = "filmtwist_ui_pos_v1";
     const UI_MIN_KEY = "filmtwist_ui_min_v1";
@@ -89,21 +90,21 @@
        ESTADO GLOBAL
        ===================================================================== */
 
-    let cloudSaves       = {};   // url → [apiName, ...]
-    let cloudFullData    = [];
+    let cloudSaves = {};   // url → [apiName, ...]
+    let cloudFullData = [];
     let cloudExtraFields = [];
-    let _cloudFetchSeq   = 0;
+    let _cloudFetchSeq = 0;
 
     let hideDownloaded = GM_getValue("filmtwist_hide_downloaded_v1", false);
-    let hideHistory    = GM_getValue("filmtwist_hide_history_v1",    false);
+    let hideHistory = GM_getValue("filmtwist_hide_history_v1", false);
 
     /* =====================================================================
        CACHE DE IMAGENS (IndexedDB)
        ===================================================================== */
 
-    const IMG_DB_NAME    = "filmtwist_img_cache_db";
+    const IMG_DB_NAME = "filmtwist_img_cache_db";
     const IMG_STORE_NAME = "images";
-    const OBJ_URL_CAP    = 400;
+    const OBJ_URL_CAP = 400;
 
     const _objUrls = new Map();
 
@@ -138,7 +139,7 @@
                     db.createObjectStore(IMG_STORE_NAME);
             };
             req.onsuccess = () => resolve(req.result);
-            req.onerror   = () => { _imgDbPromise = null; reject(req.error); };
+            req.onerror = () => { _imgDbPromise = null; reject(req.error); };
         }).catch(err => { _imgDbPromise = null; throw err; });
         return _imgDbPromise;
     }
@@ -148,10 +149,10 @@
         try {
             const db = await openImageDB();
             return new Promise((resolve) => {
-                const tx   = db.transaction(IMG_STORE_NAME, "readonly");
+                const tx = db.transaction(IMG_STORE_NAME, "readonly");
                 const getR = tx.objectStore(IMG_STORE_NAME).get(url);
                 getR.onsuccess = () => resolve(getR.result || null);
-                getR.onerror   = () => resolve(null);
+                getR.onerror = () => resolve(null);
             });
         } catch { return null; }
     }
@@ -227,7 +228,7 @@
        HELPERS GENÉRICOS
        ===================================================================== */
 
-    const toObj    = (item) => {
+    const toObj = (item) => {
         if (!item) return null;
         if (typeof item === "string") return { url: item, title: "", poster: "" };
         if (typeof item === "object") return item;
@@ -286,8 +287,8 @@
                 map.set(url, {
                     ...ex, ...item, url,
                     saved_at: ex.saved_at || item.saved_at || Date.now(),
-                    title:    betterTitle(item.title,  ex.title),
-                    poster:   betterPoster(item.poster, ex.poster),
+                    title: betterTitle(item.title, ex.title),
+                    poster: betterPoster(item.poster, ex.poster),
                 });
             }
         }
@@ -306,8 +307,8 @@
             map.set(url, {
                 ...ex, ...item, url,
                 saved_at: Math.max(ex.saved_at || 0, item.saved_at || 0) || Date.now(),
-                title:   betterTitle(item.title,  ex.title),
-                poster:  betterPoster(item.poster, ex.poster),
+                title: betterTitle(item.title, ex.title),
+                poster: betterPoster(item.poster, ex.poster),
             });
         }
         return Array.from(map.values());
@@ -323,20 +324,20 @@
 
     // ── SVG icon library (Lucide-style, no external dependency) ─────────────
     const ICONS = {
-        cloud:    `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>`,
+        cloud: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>`,
         download: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>`,
-        history:  `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><path d="M3.05 11a9 9 0 1 0 .5-4"/><polyline points="3 3 3 7 7 7"/></svg>`,
-        copy:     `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
-        check:    `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+        history: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><path d="M3.05 11a9 9 0 1 0 .5-4"/><polyline points="3 3 3 7 7 7"/></svg>`,
+        copy: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+        check: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
         settings: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>`,
-        api:      `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>`,
-        export:   `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>`,
-        poster:   `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>`,
-        dash:     `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>`,
+        api: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>`,
+        export: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>`,
+        poster: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>`,
+        dash: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>`,
     };
 
     function _iconBtn(icon, text) {
-        return `<span style="display:inline-flex;align-items:center;gap:6px;">${ICONS[icon]||''}${text}</span>`;
+        return `<span style="display:inline-flex;align-items:center;gap:6px;">${ICONS[icon] || ''}${text}</span>`;
     }
 
     // ── Toast infrastructure (slide-in from right, CSS keyframes) ────────────
@@ -425,8 +426,8 @@
 
     function downloadFallback(filename, content) {
         const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
         a.href = url; a.download = filename;
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 3000);
@@ -467,14 +468,14 @@
     }
 
     function buildStoreCache() {
-        const catalog  = getStored(STORE_CATALOG);
+        const catalog = getStored(STORE_CATALOG);
         const downloaded = getStored(STORE_DOWNLOADED);
         const copyList = getStored(STORE_DOWNLOAD_LIST);
         return {
             catalog, downloaded, copyList,
-            setCatalog:    new Set(catalog.map(u => u.url)),
+            setCatalog: new Set(catalog.map(u => u.url)),
             setDownloaded: new Set(downloaded.map(u => u.url)),
-            setCopyList:   new Set(copyList.map(u => u.url)),
+            setCopyList: new Set(copyList.map(u => u.url)),
         };
     }
 
@@ -495,9 +496,9 @@
             if (seen.has(href)) continue;
             seen.add(href);
 
-            const imgEl  = art.querySelector("picture img") || art.querySelector("img");
+            const imgEl = art.querySelector("picture img") || art.querySelector("img");
             const poster = imgEl ? (imgEl.getAttribute("src") || imgEl.getAttribute("data-src") || "") : "";
-            const title  = safeTrim(art.getAttribute("title") || imgEl?.getAttribute("alt") || "");
+            const title = safeTrim(art.getAttribute("title") || imgEl?.getAttribute("alt") || "");
 
             all.push({ url: href, title, poster });
         }
@@ -532,7 +533,7 @@
         if (!all.length) return toast("Nenhum link encontrado para processar.");
 
         const existing = getStored(STORE_CATALOG);
-        const merged   = mergeData([...existing, ...all]);
+        const merged = mergeData([...existing, ...all]);
         setStored(STORE_CATALOG, merged);
 
         toast("A enviar para a Nuvem...");
@@ -556,11 +557,11 @@
 
     async function copyLinksToClipboard() {
         const { all } = collectLinksFromPage();
-        const storedCopy  = getStored(STORE_DOWNLOAD_LIST);
-        const storedDown  = getStored(STORE_DOWNLOADED);
-        const copiedSet   = new Set(storedCopy.map(u => u.url));
-        const downSet     = new Set(storedDown.map(u => u.url));
-        const configs     = getApiConfigs();
+        const storedCopy = getStored(STORE_DOWNLOAD_LIST);
+        const storedDown = getStored(STORE_DOWNLOADED);
+        const copiedSet = new Set(storedCopy.map(u => u.url));
+        const downSet = new Set(storedDown.map(u => u.url));
+        const configs = getApiConfigs();
         const excludedNames = new Set(configs.filter(c => c.excludeFromCopy).map(c => c.name));
 
         let skipped = 0;
@@ -617,14 +618,14 @@
 
     function exportData() {
         const payload = {
-            catalog:       getStored(STORE_CATALOG),
-            downloaded:    getStored(STORE_DOWNLOADED),
+            catalog: getStored(STORE_CATALOG),
+            downloaded: getStored(STORE_DOWNLOADED),
             download_list: getStored(STORE_DOWNLOAD_LIST),
         };
         const dateStr = new Date().toISOString().split('T')[0];
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
         a.href = url; a.download = `filmtwist_backup_${dateStr}.json`; a.click();
         URL.revokeObjectURL(url);
         toast("Backup exportado com sucesso.");
@@ -647,12 +648,12 @@
 
                     const norm = (arr) => !Array.isArray(arr) ? [] : arr.map(i => typeof i === 'string' ? { url: i, title: "", poster: "" } : i);
                     const inCatalog = norm(data.catalog);
-                    const inDown    = norm(data.downloaded);
-                    const inCopy    = norm(data.download_list);
+                    const inDown = norm(data.downloaded);
+                    const inCopy = norm(data.download_list);
 
-                    if (inCatalog.length) setStored(STORE_CATALOG,       mergeData([...getStored(STORE_CATALOG),       ...inCatalog]));
-                    if (inDown.length)    setStored(STORE_DOWNLOADED,     mergeData([...getStored(STORE_DOWNLOADED),    ...inDown]));
-                    if (inCopy.length)    setStored(STORE_DOWNLOAD_LIST,  mergeData([...getStored(STORE_DOWNLOAD_LIST), ...inCopy]));
+                    if (inCatalog.length) setStored(STORE_CATALOG, mergeData([...getStored(STORE_CATALOG), ...inCatalog]));
+                    if (inDown.length) setStored(STORE_DOWNLOADED, mergeData([...getStored(STORE_DOWNLOADED), ...inDown]));
+                    if (inCopy.length) setStored(STORE_DOWNLOAD_LIST, mergeData([...getStored(STORE_DOWNLOAD_LIST), ...inCopy]));
 
                     const allImported = mergeData([...inCatalog, ...inDown, ...inCopy]);
                     if (allImported.some(i => i.title && i.poster)) saveToCloud();
@@ -688,7 +689,7 @@
         let updated = 0;
         if (total > 0) progressToast('ft_scrape', 'A extrair metadados...', 0, total);
 
-        const sleep  = ms => new Promise(r => setTimeout(r, ms));
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
         let baseDelay = 1200;
         const ALL_KEYS = [STORE_CATALOG, STORE_DOWNLOADED, STORE_DOWNLOAD_LIST];
 
@@ -715,7 +716,7 @@
                         || doc.querySelector("picture img")?.getAttribute("src")
                         || "";
 
-                    item.title  = title  || "Sem Título";
+                    item.title = title || "Sem Título";
                     item.poster = poster || "https://placehold.co/280x400?text=Sem+Capa";
 
                     // Ano
@@ -731,10 +732,10 @@
                     if (window._ftDashUpdateItem) window._ftDashUpdateItem(item.url, item.title, item.poster, item.year || "");
                 } else {
                     if (res.status === 429) {
-                    baseDelay += 2000;
-                    // Pausa não bloqueante — aborta se o utilizador fechar o dashboard
-                    await new Promise(r => setTimeout(r, 60000));
-                }
+                        baseDelay += 2000;
+                        // Pausa não bloqueante — aborta se o utilizador fechar o dashboard
+                        await new Promise(r => setTimeout(r, 60000));
+                    }
                     else baseDelay = Math.min(baseDelay + 500, 5000);
                 }
             } catch (err) {
@@ -754,9 +755,9 @@
        OBSERVER INCREMENTAL + applyCardState()
        ===================================================================== */
 
-    const _seenCards    = new WeakSet();
+    const _seenCards = new WeakSet();
     const _pendingCards = new Set();
-    let   _rafId        = 0;
+    let _rafId = 0;
 
     function queueCard(el) {
         if (!el || _seenCards.has(el)) return;
@@ -768,9 +769,9 @@
         _rafId = 0;
         if (!_pendingCards.size) return;
 
-        const cache    = buildStoreCache();
+        const cache = buildStoreCache();
         const cloudMap = _buildCloudMap();
-        const configs  = getApiConfigs();
+        const configs = getApiConfigs();
         const excludedFromHide = new Set(configs.filter(c => c.excludeFromHide).map(c => c.name));
         const readableApiNames = new Set(configs.map(c => c.name));
 
@@ -821,28 +822,28 @@
         if (!href || !isRelevantFTItem(href)) return false;
 
         // Estado local
-        const isCatalog    = cache.setCatalog.has(href);
+        const isCatalog = cache.setCatalog.has(href);
         const isDownloaded = cache.setDownloaded.has(href);
-        const isCopied     = cache.setCopyList.has(href);
+        const isCopied = cache.setCopyList.has(href);
 
         // Estado cloud
-        const cloudItems        = cloudMap.get(href) || [];
-        const dlCloudItems      = cloudItems.filter(i => i.listType === STORE_DOWNLOADED && readableApiNames.has(i.apiName));
-        const catalogCloudItems = cloudItems.filter(i => i.listType === STORE_CATALOG    && readableApiNames.has(i.apiName));
+        const cloudItems = cloudMap.get(href) || [];
+        const dlCloudItems = cloudItems.filter(i => i.listType === STORE_DOWNLOADED && readableApiNames.has(i.apiName));
+        const catalogCloudItems = cloudItems.filter(i => i.listType === STORE_CATALOG && readableApiNames.has(i.apiName));
 
-        const isSavedInCloud   = dlCloudItems.length > 0;
-        const isCatalogCloud   = catalogCloudItems.length > 0;
-        const cloudNames       = [...new Set(dlCloudItems.map(i => i.apiName))];
-        const isOnlyExcluded   = cloudNames.length > 0 && cloudNames.every(n => excludedFromHide.has(n));
+        const isSavedInCloud = dlCloudItems.length > 0;
+        const isCatalogCloud = catalogCloudItems.length > 0;
+        const cloudNames = [...new Set(dlCloudItems.map(i => i.apiName))];
+        const isOnlyExcluded = cloudNames.length > 0 && cloudNames.every(n => excludedFromHide.has(n));
 
-        const visuallySaved    = isDownloaded || isCopied || isSavedInCloud;
-        const visuallyCatalog  = isCatalog || isCatalogCloud;
-        const meetsHide        = isDownloaded || (isSavedInCloud && !isOnlyExcluded);
+        const visuallySaved = isDownloaded || isCopied || isSavedInCloud;
+        const visuallyCatalog = isCatalog || isCatalogCloud;
+        const meetsHide = isDownloaded || (isSavedInCloud && !isOnlyExcluded);
 
         // Container a ocultar — col.posters-infinite-scroll
         const container = root.parentElement?.classList.contains("col") ? root.parentElement : root.parentElement || root;
 
-        root.style.boxShadow  = "";
+        root.style.boxShadow = "";
         root.style.transition = "all 0.2s ease";
 
         if ((meetsHide && hideDownloaded) || (visuallyCatalog && hideHistory)) {
@@ -861,8 +862,8 @@
 
             if (visuallyCatalog) {
                 const icon = document.createElement("div");
-                icon.style.cssText = "background:rgba(0,0,0,0.65);color:#38bdf8;display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:4px;border:1px dashed rgba(14,165,233,0.6);";
-                icon.title = "No catálogo/histórico"; icon.innerHTML = ICONS.history;
+                icon.style.cssText = "background:rgba(0,0,0,0.65);color:#38bdf8;display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:4px;border:1px dashed rgba(14,165,233,0.6);font-size:13px;";
+                icon.title = "No catálogo/histórico"; icon.innerHTML = "📜";
                 badge.appendChild(icon);
             }
             if (isSavedInCloud) {
@@ -873,7 +874,7 @@
                     const match = dlCloudItems.find(i => i.apiName === n);
                     names += `<span style="color:${match?.apiColor || '#3b82f6'}">${n}</span>` + (idx < cloudNames.length - 1 ? ", " : "");
                 });
-                pill.innerHTML = `${ICONS.cloud} <span>${names}</span>`; pill.style.display='flex'; pill.style.alignItems='center'; pill.style.gap='4px';
+                pill.innerHTML = `${ICONS.cloud} <span>${names}</span>`; pill.style.display = 'flex'; pill.style.alignItems = 'center'; pill.style.gap = '4px';
                 badge.appendChild(pill);
             }
             root.style.position = "relative";
@@ -884,9 +885,9 @@
         const imgWrapper = root.querySelector('.cover') || root.querySelector('picture') || root;
         if (visuallySaved) {
             imgWrapper.style.opacity = "0.35";
-            if (isCopied && !isDownloaded)              root.style.boxShadow = "0 0 0 3px #ffc107";
-            else if (isSavedInCloud && !isDownloaded)   root.style.boxShadow = `0 0 0 3px ${getApiColor(cloudNames[0], configs)}`;
-            else                                         root.style.boxShadow = "0 0 0 3px #10b981";
+            if (isCopied && !isDownloaded) root.style.boxShadow = "0 0 0 3px #ffc107";
+            else if (isSavedInCloud && !isDownloaded) root.style.boxShadow = `0 0 0 3px ${getApiColor(cloudNames[0], configs)}`;
+            else root.style.boxShadow = "0 0 0 3px #10b981";
             root.style.borderRadius = "6px";
         } else {
             imgWrapper.style.opacity = "1";
@@ -898,9 +899,9 @@
 
     function highlightSavedLinks() {
         _currentHiddenCount = 0;
-        const cache    = buildStoreCache();
+        const cache = buildStoreCache();
         const cloudMap = _buildCloudMap();
-        const configs  = getApiConfigs();
+        const configs = getApiConfigs();
         const excludedFromHide = new Set(configs.filter(c => c.excludeFromHide).map(c => c.name));
         const readableApiNames = new Set(configs.map(c => c.name));
 
@@ -945,16 +946,16 @@
 
     // SVG icons para stats — nítidos em qualquer DPI
     const STAT_ICONS = {
-        page:     `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`,
-        catalog:  `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M5 3a2 2 0 0 0-2 2v16l9-4 9 4V5a2 2 0 0 0-2-2H5z"/></svg>`,
+        page: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`,
+        catalog: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M5 3a2 2 0 0 0-2 2v16l9-4 9 4V5a2 2 0 0 0-2-2H5z"/></svg>`,
         download: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
-        copy:     `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+        copy: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
     };
 
     function updateStats() {
         if (!statsEl) return;
         const { all } = collectLinksFromPage();
-        const pg  = all.length;
+        const pg = all.length;
         const cat = getStored(STORE_CATALOG).length;
         const dwn = getStored(STORE_DOWNLOADED).length;
         const cpy = getStored(STORE_DOWNLOAD_LIST).length;
@@ -968,10 +969,10 @@
             </div>`;
         statsEl.innerHTML =
             `<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,.05);border-radius:9px;overflow:hidden;">
-                ${cell(STAT_ICONS.page,    '#94a3b8', pg,  'Na página')}
+                ${cell(STAT_ICONS.page, '#94a3b8', pg, 'Na página')}
                 ${cell(STAT_ICONS.catalog, '#dc2626', cat, 'Catálogo')}
-                ${cell(STAT_ICONS.download,'#10b981', dwn, 'Transferidos')}
-                ${cell(STAT_ICONS.copy,    cpy > 0 ? '#f59e0b' : '#334155', cpy, 'Copiados')}
+                ${cell(STAT_ICONS.download, '#10b981', dwn, 'Transferidos')}
+                ${cell(STAT_ICONS.copy, cpy > 0 ? '#f59e0b' : '#334155', cpy, 'Copiados')}
             </div>`;
 
         const btnMark = document.getElementById("ft-btn-mark-copied");
@@ -988,7 +989,7 @@
             b.textContent = label;
         }
         const accent = opts.accent || "rgba(239,68,68,.6)";
-        const danger  = opts.danger || false;
+        const danger = opts.danger || false;
         b.style.cssText = `padding:10px 12px;border-radius:10px;
             background:rgba(255,255,255,.05);
             color:${danger ? "#f87171" : "#e2e8f0"};
@@ -1050,7 +1051,7 @@
             color:#94a3b8;border-radius:7px;width:26px;height:26px;cursor:pointer;
             transition:background .15s,color .15s;`;
         minBtn.addEventListener("mouseover", () => { minBtn.style.background = "rgba(255,255,255,.1)"; minBtn.style.color = "#fff"; });
-        minBtn.addEventListener("mouseout",  () => { minBtn.style.background = "rgba(255,255,255,.05)"; minBtn.style.color = "#94a3b8"; });
+        minBtn.addEventListener("mouseout", () => { minBtn.style.background = "rgba(255,255,255,.05)"; minBtn.style.color = "#94a3b8"; });
         header.append(title, minBtn);
 
         // Body
@@ -1068,7 +1069,7 @@
         btnCopy.style.flex = "1";
 
         const rowCopied = document.createElement("div"); rowCopied.style.cssText = "display:flex;gap:7px;";
-        const btnMark  = makeButton("Marcar transferidos", markCopiedAsDownloaded);
+        const btnMark = makeButton("Marcar transferidos", markCopiedAsDownloaded);
         const btnReset = makeButton("Limpar copiados", resetCopiedLinks, { danger: true });
         btnMark.id = "ft-btn-mark-copied";
         btnMark.style.flex = "1"; btnReset.style.flex = "1";
@@ -1092,9 +1093,9 @@
 
         const applyMin = (v) => {
             body.style.display = v ? "none" : "flex";
-            minBtn.innerHTML   = v ? svgMax : svgMin;
+            minBtn.innerHTML = v ? svgMax : svgMin;
             setMinimized(v);
-            panel.style.width  = v ? "180px" : "320px";
+            panel.style.width = v ? "180px" : "320px";
         };
         minBtn.addEventListener("click", (e) => { e.stopPropagation(); applyMin(body.style.display !== "none"); });
 
@@ -1105,7 +1106,7 @@
             const cy = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
             dragging = true; startX = cx; startY = cy;
             startRight = parseInt(panel.style.right, 10) || 14;
-            startTop   = parseInt(panel.style.top, 10);
+            startTop = parseInt(panel.style.top, 10);
             if (isNaN(startTop)) { startTop = panel.offsetTop; panel.style.bottom = 'auto'; }
             if (!e.type.includes('touch')) e.preventDefault();
         };
@@ -1114,20 +1115,20 @@
             if (e.type.includes('touch')) e.preventDefault();
             const cx = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
             const cy = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-            const nr = Math.max(0, Math.min(startRight + (startX - cx), window.innerWidth  - panel.offsetWidth));
-            const nt = Math.max(0, Math.min(startTop  + (cy - startY), window.innerHeight - panel.offsetHeight));
+            const nr = Math.max(0, Math.min(startRight + (startX - cx), window.innerWidth - panel.offsetWidth));
+            const nt = Math.max(0, Math.min(startTop + (cy - startY), window.innerHeight - panel.offsetHeight));
             panel.style.right = `${nr}px`; panel.style.top = `${nt}px`;
         };
         const endDrag = () => {
             if (!dragging) return; dragging = false;
             saveUIPos({ right: parseInt(panel.style.right, 10) || 14, top: parseInt(panel.style.top, 10) });
         };
-        header.addEventListener("mousedown",  startDrag);
+        header.addEventListener("mousedown", startDrag);
         header.addEventListener("touchstart", startDrag, { passive: false });
-        window.addEventListener("mousemove",  moveDrag);
-        window.addEventListener("touchmove",  moveDrag, { passive: false });
-        window.addEventListener("mouseup",    endDrag);
-        window.addEventListener("touchend",   endDrag);
+        window.addEventListener("mousemove", moveDrag);
+        window.addEventListener("touchmove", moveDrag, { passive: false });
+        window.addEventListener("mouseup", endDrag);
+        window.addEventListener("touchend", endDrag);
 
         updateStats();
     }
@@ -1145,7 +1146,7 @@
         wrapper.id = "ft-hide-btns";
         wrapper.style.cssText = "display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;margin-left:auto;";
 
-        const svgEye    = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`;
+        const svgEye = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`;
         const svgEyeOff = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>`;
 
         const createBtn = (id, labelOn, labelOff, isHidden, onChange) => {
@@ -1164,8 +1165,8 @@
         wrapper.append(
             createBtn("ft-hide-down", "Mostrar transferidos", "Ocultar transferidos", hideDownloaded,
                 (v) => { hideDownloaded = v; GM_setValue("filmtwist_hide_downloaded_v1", v); highlightSavedLinks(); }),
-            createBtn("ft-hide-hist", "Mostrar catálogo",     "Ocultar catálogo",     hideHistory,
-                (v) => { hideHistory    = v; GM_setValue("filmtwist_hide_history_v1",    v); highlightSavedLinks(); })
+            createBtn("ft-hide-hist", "Mostrar catálogo", "Ocultar catálogo", hideHistory,
+                (v) => { hideHistory = v; GM_setValue("filmtwist_hide_history_v1", v); highlightSavedLinks(); })
         );
 
         // Insere antes do sort
@@ -1177,21 +1178,21 @@
        ===================================================================== */
 
     function __obf(str) {
-        const key   = "FT_SEC_KEY_24";
+        const key = "FT_SEC_KEY_24";
         const bytes = new TextEncoder().encode(str);
-        const kbytes= new TextEncoder().encode(key);
-        const out   = new Uint8Array(bytes.length);
+        const kbytes = new TextEncoder().encode(key);
+        const out = new Uint8Array(bytes.length);
         for (let i = 0; i < bytes.length; i++) out[i] = bytes[i] ^ kbytes[i % kbytes.length];
         let bin = ""; out.forEach(b => bin += String.fromCharCode(b));
         return btoa(bin);
     }
     function __deobf(b64) {
         try {
-            const key   = "FT_SEC_KEY_24";
-            const bin   = atob(b64);
+            const key = "FT_SEC_KEY_24";
+            const bin = atob(b64);
             const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
-            const kbytes= new TextEncoder().encode(key);
-            const out   = new Uint8Array(bytes.length);
+            const kbytes = new TextEncoder().encode(key);
+            const out = new Uint8Array(bytes.length);
             for (let i = 0; i < bytes.length; i++) out[i] = bytes[i] ^ kbytes[i % kbytes.length];
             return new TextDecoder().decode(out);
         } catch { return b64; }
@@ -1215,14 +1216,14 @@
     }
 
     async function fetchCloudData() {
-        const seq     = ++_cloudFetchSeq;
+        const seq = ++_cloudFetchSeq;
         const configs = getApiConfigs();
         const nextSaves = {}, nextFull = [], nextExtra = [];
 
         await Promise.all(configs.map(async (api) => {
             try {
                 const hdrs = api.apiKey ? { "x-api-key": api.apiKey } : undefined;
-                const res  = await fetch(`${api.url}?keys=${STORE_CATALOG},${STORE_DOWNLOADED},${STORE_EXTRA_FIELD}`, { headers: hdrs });
+                const res = await fetch(`${api.url}?keys=${STORE_CATALOG},${STORE_DOWNLOADED},${STORE_EXTRA_FIELD}`, { headers: hdrs });
                 if (!res.ok) return;
                 const data = await res.json();
 
@@ -1236,8 +1237,8 @@
                 };
 
                 if (data && typeof data === "object" && !Array.isArray(data)) {
-                    processArr(data[STORE_CATALOG],    STORE_CATALOG);
-                    processArr(data[STORE_DOWNLOADED],  STORE_DOWNLOADED);
+                    processArr(data[STORE_CATALOG], STORE_CATALOG);
+                    processArr(data[STORE_DOWNLOADED], STORE_DOWNLOADED);
                     if (Array.isArray(data[STORE_EXTRA_FIELD])) nextExtra.push(...data[STORE_EXTRA_FIELD]);
                 }
             } catch (err) { console.error(`Falha no GET para ${api.name}:`, err); }
@@ -1245,8 +1246,8 @@
 
         if (seq !== _cloudFetchSeq) return;
 
-        cloudSaves       = nextSaves;
-        cloudFullData    = nextFull.sort((a, b) => (b.saved_at || 0) - (a.saved_at || 0));
+        cloudSaves = nextSaves;
+        cloudFullData = nextFull.sort((a, b) => (b.saved_at || 0) - (a.saved_at || 0));
         cloudExtraFields = nextExtra;
 
         highlightSavedLinks();
@@ -1266,7 +1267,7 @@
                 try { cloudData = await getRes.json() || {}; } catch { /* ignora */ }
 
                 const payload = {
-                    [STORE_CATALOG]:    mergeData([...(cloudData[STORE_CATALOG]   || []), ...getStored(STORE_CATALOG)]),
+                    [STORE_CATALOG]: mergeData([...(cloudData[STORE_CATALOG] || []), ...getStored(STORE_CATALOG)]),
                     [STORE_DOWNLOADED]: mergeData([...(cloudData[STORE_DOWNLOADED] || []), ...getStored(STORE_DOWNLOADED)]),
                     [STORE_EXTRA_FIELD]: mergeDataPreferNewest([...(cloudData[STORE_EXTRA_FIELD] || []), ...getStored(STORE_EXTRA_FIELD)]),
                 };
@@ -1337,7 +1338,7 @@
 
         const renderList = () => {
             const configs = getApiConfigs();
-            const isEditing   = editingIdx !== -1;
+            const isEditing = editingIdx !== -1;
             const editingName = isEditing ? esc(configs[editingIdx]?.name ?? "") : "";
 
             let listHtml = "";
@@ -1348,25 +1349,25 @@
             } else {
                 configs.forEach((api, idx) => {
                     const hasCatalog = cloudFullData.some(i => i.apiName === api.name && i.listType === STORE_CATALOG);
-                    const hasDown    = cloudFullData.some(i => i.apiName === api.name && i.listType === STORE_DOWNLOADED);
-                    const safeName   = esc(api.name);
-                    const safeColor  = esc(getApiColor(api.name, configs));
-                    const actionBtn  = (cls, label, bg) =>
+                    const hasDown = cloudFullData.some(i => i.apiName === api.name && i.listType === STORE_DOWNLOADED);
+                    const safeName = esc(api.name);
+                    const safeColor = esc(getApiColor(api.name, configs));
+                    const actionBtn = (cls, label, bg) =>
                         `<button data-idx="${idx}" class="${cls}" style="padding:4px 10px;background:${bg};color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;font-weight:500;">${label}</button>`;
                     listHtml += `
                     <div style="background:rgba(255,255,255,.03);padding:12px 14px;border-radius:10px;margin-bottom:8px;border:1px solid rgba(255,255,255,.06);">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${api.apiKey ? '10px' : '0'};">
                             <span style="font-size:13px;font-weight:600;color:${safeColor};letter-spacing:.02em;">${safeName}</span>
                             <div style="display:flex;gap:6px;">
-                                ${actionBtn("ft-edit-api-btn","Editar","rgba(100,116,139,.3)")}
-                                ${actionBtn("ft-del-api-btn","Remover","rgba(220,38,38,.2)")}
+                                ${actionBtn("ft-edit-api-btn", "Editar", "rgba(100,116,139,.3)")}
+                                ${actionBtn("ft-del-api-btn", "Remover", "rgba(220,38,38,.2)")}
                             </div>
                         </div>
                         ${api.apiKey ? `<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;padding-top:8px;border-top:1px solid rgba(255,255,255,.05);">
                             <span style="font-size:10px;color:#475569;margin-right:2px;letter-spacing:.06em;text-transform:uppercase;">Gestão:</span>
-                            ${actionBtn("ft-restore-btn","⬇ Restaurar local","rgba(37,99,235,.25)")}
-                            ${hasCatalog ? actionBtn("ft-purge-catalog-btn","✕ Catálogo","rgba(14,165,233,.2)") : ''}
-                            ${hasDown    ? actionBtn("ft-purge-down-btn","✕ Transferidos","rgba(194,65,12,.25)") : ''}
+                            ${actionBtn("ft-restore-btn", "⬇ Restaurar local", "rgba(37,99,235,.25)")}
+                            ${hasCatalog ? actionBtn("ft-purge-catalog-btn", "✕ Catálogo", "rgba(14,165,233,.2)") : ''}
+                            ${hasDown ? actionBtn("ft-purge-down-btn", "✕ Transferidos", "rgba(194,65,12,.25)") : ''}
                         </div>` : ''}
                         <div style="display:flex;gap:12px;margin-top:7px;font-size:10.5px;">
                             <span style="color:${api.apiKey ? '#10b981' : '#475569'};">${api.apiKey ? '● Write access' : '○ Apenas leitura'}</span>
@@ -1428,7 +1429,7 @@
                 genBtn.onclick = () => {
                     const arr = new Uint8Array(24);
                     crypto.getRandomValues(arr);
-                    const key = Array.from(arr).map(b => b.toString(16).padStart(2,'0')).join('');
+                    const key = Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
                     const inp = box.querySelector("#ft-api-key");
                     inp.value = key; inp.type = "text";
                     setTimeout(() => { inp.type = "password"; }, 3000);
@@ -1438,18 +1439,18 @@
 
             // Focus styles on inputs
             box.querySelectorAll("input[id^='ft-api']").forEach(inp => {
-                inp.addEventListener("focus",  () => inp.style.borderColor = "rgba(220,38,38,.5)");
-                inp.addEventListener("blur",   () => inp.style.borderColor = "rgba(255,255,255,.09)");
+                inp.addEventListener("focus", () => inp.style.borderColor = "rgba(220,38,38,.5)");
+                inp.addEventListener("blur", () => inp.style.borderColor = "rgba(255,255,255,.09)");
             });
 
             if (isEditing) {
                 const api = configs[editingIdx];
-                box.querySelector("#ft-api-name").value       = api.name;
-                box.querySelector("#ft-api-url").value        = api.url;
-                box.querySelector("#ft-api-key").value        = api.apiKey || "";
+                box.querySelector("#ft-api-name").value = api.name;
+                box.querySelector("#ft-api-url").value = api.url;
+                box.querySelector("#ft-api-key").value = api.apiKey || "";
                 box.querySelector("#ft-api-exc-copy").checked = !!api.excludeFromCopy;
                 box.querySelector("#ft-api-exc-hide").checked = !!api.excludeFromHide;
-                box.querySelector("#ft-cancel-edit").onclick  = () => { editingIdx = -1; renderList(); };
+                box.querySelector("#ft-cancel-edit").onclick = () => { editingIdx = -1; renderList(); };
             }
 
             box.querySelectorAll(".ft-del-api-btn").forEach(btn => {
@@ -1481,21 +1482,21 @@
                     };
                 });
             };
-            setupPurge(".ft-purge-catalog-btn",  "CATÁLOGO",     STORE_CATALOG);
-            setupPurge(".ft-purge-down-btn",      "TRANSFERIDOS",  STORE_DOWNLOADED);
+            setupPurge(".ft-purge-catalog-btn", "CATÁLOGO", STORE_CATALOG);
+            setupPurge(".ft-purge-down-btn", "TRANSFERIDOS", STORE_DOWNLOADED);
 
             box.querySelectorAll(".ft-restore-btn").forEach(btn => {
                 btn.onclick = async () => {
-                    const i   = parseInt(btn.getAttribute("data-idx"), 10);
+                    const i = parseInt(btn.getAttribute("data-idx"), 10);
                     const api = configs[i];
                     if (!confirm(`Restaurar LOCAL com dados de ${api.name}?`)) return;
                     const hdrs = api.apiKey ? { "x-api-key": api.apiKey } : undefined;
-                    const res  = await fetch(`${api.url}?keys=${STORE_CATALOG},${STORE_DOWNLOADED}`, { headers: hdrs });
+                    const res = await fetch(`${api.url}?keys=${STORE_CATALOG},${STORE_DOWNLOADED}`, { headers: hdrs });
                     if (!res.ok) { alert(`Falha: ${res.status}`); return; }
                     const data = await res.json();
                     if (data && typeof data === 'object') {
-                        if (data[STORE_CATALOG])    setStored(STORE_CATALOG,    data[STORE_CATALOG]);
-                        if (data[STORE_DOWNLOADED])  setStored(STORE_DOWNLOADED,  data[STORE_DOWNLOADED]);
+                        if (data[STORE_CATALOG]) setStored(STORE_CATALOG, data[STORE_CATALOG]);
+                        if (data[STORE_DOWNLOADED]) setStored(STORE_DOWNLOADED, data[STORE_DOWNLOADED]);
                         toast(`Restauro concluído via ${api.name}.`);
                         updateStats(); highlightSavedLinks(); mod.remove();
                     } else alert("Formato de dados inválido.");
@@ -1503,12 +1504,12 @@
             });
 
             box.querySelector("#ft-api-close").onclick = () => mod.remove();
-            box.querySelector("#ft-api-save").onclick  = () => {
-                const n   = box.querySelector("#ft-api-name").value.trim();
-                let u     = box.querySelector("#ft-api-url").value.trim();
-                const k   = box.querySelector("#ft-api-key").value.trim();
+            box.querySelector("#ft-api-save").onclick = () => {
+                const n = box.querySelector("#ft-api-name").value.trim();
+                let u = box.querySelector("#ft-api-url").value.trim();
+                const k = box.querySelector("#ft-api-key").value.trim();
                 const exc = box.querySelector("#ft-api-exc-copy").checked;
-                const excH= box.querySelector("#ft-api-exc-hide").checked;
+                const excH = box.querySelector("#ft-api-exc-hide").checked;
                 if (!n || !u) return alert("Nome e URL são obrigatórios.");
                 if (!u.startsWith("http")) return alert("URL deve começar por http:// ou https://");
                 if (u.endsWith('/')) u = u.slice(0, -1);
@@ -1549,9 +1550,9 @@
 
         const VueLib = unsafeWindow.Vue;
 
-        const localCatalog  = getStored(STORE_CATALOG).length;
-        const localDown     = getStored(STORE_DOWNLOADED).length;
-        const localCopy     = getStored(STORE_DOWNLOAD_LIST).length;
+        const localCatalog = getStored(STORE_CATALOG).length;
+        const localDown = getStored(STORE_DOWNLOADED).length;
+        const localCopy = getStored(STORE_DOWNLOAD_LIST).length;
 
         const notesMap = new Map();
         mergeDataPreferNewest([...cloudExtraFields, ...getStored(STORE_EXTRA_FIELD)]).forEach(i => {
@@ -1566,21 +1567,21 @@
                     isLocalDownloaded: false, isLocalHistory: false, isLocal: false, isCopied: false
                 });
             }
-            const r          = allItemsMap.get(item.url);
+            const r = allItemsMap.get(item.url);
             const activeType = item.listType || explicitType;
-            const isDl   = activeType === STORE_DOWNLOADED;
+            const isDl = activeType === STORE_DOWNLOADED;
             const isCopy = activeType === STORE_DOWNLOAD_LIST;
             const isHist = activeType === STORE_CATALOG;
             if (isCloud) {
                 if (!r.sources.some(s => s.name === sourceName)) r.sources.push({ name: sourceName, color: sourceColor });
-                if (isDl)   r.cloudDownloaded[sourceName] = true;
-                if (isHist) r.cloudHistory[sourceName]    = true;
+                if (isDl) r.cloudDownloaded[sourceName] = true;
+                if (isHist) r.cloudHistory[sourceName] = true;
                 if (item.saved_at && (!r.saved_at || item.saved_at > r.saved_at)) r.saved_at = item.saved_at;
             } else {
                 r.isLocal = true;
-                if (isDl)   r.isLocalDownloaded = true;
-                if (isHist) r.isLocalHistory    = true;
-                if (isCopy) r.isCopied          = true;
+                if (isDl) r.isLocalDownloaded = true;
+                if (isHist) r.isLocalHistory = true;
+                if (isCopy) r.isCopied = true;
                 if (!r.saved_at && item.saved_at) r.saved_at = item.saved_at;
             }
             if (!r.mediaType) {
@@ -1589,23 +1590,23 @@
             r.ft_extra_field = notesMap.get(r.url) || "";
         };
 
-        cloudFullData.forEach(item                => addOrUpdate(item, item.apiName, item.apiColor, true));
-        getStored(STORE_CATALOG).forEach(item     => addOrUpdate(item, "Local", null, false, STORE_CATALOG));
-        getStored(STORE_DOWNLOADED).forEach(item  => addOrUpdate(item, "Local", null, false, STORE_DOWNLOADED));
+        cloudFullData.forEach(item => addOrUpdate(item, item.apiName, item.apiColor, true));
+        getStored(STORE_CATALOG).forEach(item => addOrUpdate(item, "Local", null, false, STORE_CATALOG));
+        getStored(STORE_DOWNLOADED).forEach(item => addOrUpdate(item, "Local", null, false, STORE_DOWNLOADED));
         getStored(STORE_DOWNLOAD_LIST).forEach(item => addOrUpdate(item, "Local", null, false, STORE_DOWNLOAD_LIST));
 
-        const configs         = getApiConfigs();
+        const configs = getApiConfigs();
         const uniqueCloudsArr = [...new Set(configs.map(c => c.name))];
-        const cloudStatsData  = uniqueCloudsArr.map(cn => ({
+        const cloudStatsData = uniqueCloudsArr.map(cn => ({
             name: cn, color: getApiColor(cn, configs),
-            hasKey:   !!configs.find(c => c.name === cn)?.apiKey,
-            catalog:  cloudFullData.filter(i => i.apiName === cn && i.listType === STORE_CATALOG).length,
+            hasKey: !!configs.find(c => c.name === cn)?.apiKey,
+            catalog: cloudFullData.filter(i => i.apiName === cn && i.listType === STORE_CATALOG).length,
             downloaded: cloudFullData.filter(i => i.apiName === cn && i.listType === STORE_DOWNLOADED).length,
         }));
 
-        const allDashData   = Array.from(allItemsMap.values()).sort((a, b) => (b.saved_at || 0) - (a.saved_at || 0));
+        const allDashData = Array.from(allItemsMap.values()).sort((a, b) => (b.saved_at || 0) - (a.saved_at || 0));
         const completeItems = allDashData.filter(i => i.title && i.poster && !i.poster.includes('placehold'));
-        const pendingItems  = allDashData.filter(i => !i.title || !i.poster || i.poster.includes('placehold'));
+        const pendingItems = allDashData.filter(i => !i.title || !i.poster || i.poster.includes('placehold'));
 
         if (pendingItems.length > 0) setTimeout(() => scrapeMissingMetadataInBackground(pendingItems), 800);
 
@@ -1638,7 +1639,7 @@
 
         const { createApp, ref, computed } = VueLib;
         const dashboardData = ref(completeItems);
-        const pendingRef    = ref(pendingItems);
+        const pendingRef = ref(pendingItems);
 
         const app = createApp({
             template: `
@@ -1789,48 +1790,48 @@
 </div>`,
             setup() {
                 const BATCH = 50;
-                const sentinel    = ref(null);
-                const searchName  = ref("");
+                const sentinel = ref(null);
+                const searchName = ref("");
                 const filterStatus = ref("all");
                 const filterCloud = ref("all");
-                const dateStart   = ref("");
-                const dateEnd     = ref("");
-                const viewMode    = ref(safeLSGet("filmtwist_dash_view_mode", "card") || "card");
-                const imageCache  = ref({});
-                const editingItem     = ref(null);
+                const dateStart = ref("");
+                const dateEnd = ref("");
+                const viewMode = ref(safeLSGet("filmtwist_dash_view_mode", "card") || "card");
+                const imageCache = ref({});
+                const editingItem = ref(null);
                 const editingNoteItem = ref(null);
-                const scrapeCurrent   = ref(0);
-                const scrapeTotal     = ref(0);
+                const scrapeCurrent = ref(0);
+                const scrapeTotal = ref(0);
 
                 const st = { localCatalog, localDown, localCopy, cloudStats: cloudStatsData, uniqueClouds: uniqueCloudsArr };
                 const statCards = {
-                    'Catálogo':       { count: localCatalog, color: '#0ea5e9', icon: '🔖' },
-                    'Transferidos':   { count: localDown,    color: '#10b981', icon: '✓'  },
-                    'Copiados temp':  { count: localCopy,    color: '#f59e0b', icon: '⋯'  },
+                    'Catálogo': { count: localCatalog, color: '#0ea5e9', icon: '🔖' },
+                    'Transferidos': { count: localDown, color: '#10b981', icon: '✓' },
+                    'Copiados temp': { count: localCopy, color: '#f59e0b', icon: '⋯' },
                 };
 
                 const ar = computed(() => viewMode.value === 'poster' ? '2/3' : '16/9');
 
                 const filtered = computed(() => {
-                    const q  = searchName.value.toLowerCase();
+                    const q = searchName.value.toLowerCase();
                     const ds = dateStart.value ? new Date(dateStart.value).getTime() : 0;
-                    const de = dateEnd.value   ? new Date(dateEnd.value).getTime() + 86400000 : Infinity;
+                    const de = dateEnd.value ? new Date(dateEnd.value).getTime() + 86400000 : Infinity;
                     return dashboardData.value.filter(item => {
                         if (q && !(item.title || '').toLowerCase().includes(q)) return false;
                         const status = filterStatus.value, cloud = filterCloud.value;
                         if (cloud === "local") {
                             if (!item.isLocal) return false;
                             if (status === "downloaded" && !item.isLocalDownloaded) return false;
-                            if (status === "history"    && !item.isLocalHistory)    return false;
-                            if (status === "copied"     && !item.isCopied)          return false;
+                            if (status === "history" && !item.isLocalHistory) return false;
+                            if (status === "copied" && !item.isCopied) return false;
                         } else if (cloud !== "all") {
                             if (!item.sources.some(s => s.name === cloud)) return false;
                             if (status === "downloaded" && !item.cloudDownloaded[cloud]) return false;
-                            if (status === "history"    && !item.cloudHistory[cloud])    return false;
+                            if (status === "history" && !item.cloudHistory[cloud]) return false;
                         } else {
                             if (status === "downloaded" && !item.isLocalDownloaded && !Object.keys(item.cloudDownloaded).length) return false;
-                            if (status === "history"    && !item.isLocalHistory    && !Object.keys(item.cloudHistory).length)    return false;
-                            if (status === "copied"     && !item.isCopied) return false;
+                            if (status === "history" && !item.isLocalHistory && !Object.keys(item.cloudHistory).length) return false;
+                            if (status === "copied" && !item.isCopied) return false;
                         }
                         const t = item.saved_at || 0;
                         return !(t < ds || (t > 0 && t > de));
@@ -1838,8 +1839,8 @@
                 });
 
                 const displayCount = ref(BATCH);
-                const displayed    = computed(() => filtered.value.slice(0, displayCount.value));
-                const loadMore     = () => { if (displayCount.value < filtered.value.length) displayCount.value += BATCH; };
+                const displayed = computed(() => filtered.value.slice(0, displayCount.value));
+                const loadMore = () => { if (displayCount.value < filtered.value.length) displayCount.value += BATCH; };
 
                 VueLib.watch([searchName, filterStatus, filterCloud, dateStart, dateEnd], () => { displayCount.value = BATCH; });
                 VueLib.onMounted(() => {
@@ -1848,17 +1849,17 @@
                     obs.observe(sentinel.value);
                 });
 
-                const toggleView    = () => { viewMode.value = viewMode.value === 'card' ? 'poster' : 'card'; safeLSSet("filmtwist_dash_view_mode", viewMode.value); };
-                const close         = () => { delete window._ftDashUpdateItem; delete window._ftDashScrapeProgress; revokeAllObjectURLs(); mod.remove(); };
-                const isSaved       = (item) => item.isLocalDownloaded || Object.keys(item.cloudDownloaded).length > 0;
-                const badgeIcon     = (item, n) => { let i = ''; if (item.cloudDownloaded[n]) i += ICONS.download; if (item.cloudHistory[n]) i += ICONS.history; return i || ICONS.cloud; };
-                const cardStyle     = (item) => {
+                const toggleView = () => { viewMode.value = viewMode.value === 'card' ? 'poster' : 'card'; safeLSSet("filmtwist_dash_view_mode", viewMode.value); };
+                const close = () => { delete window._ftDashUpdateItem; delete window._ftDashScrapeProgress; revokeAllObjectURLs(); mod.remove(); };
+                const isSaved = (item) => item.isLocalDownloaded || Object.keys(item.cloudDownloaded).length > 0;
+                const badgeIcon = (item, n) => { let i = ''; if (item.cloudDownloaded[n]) i += ICONS.download; if (item.cloudHistory[n]) i += ICONS.history; return i || ICONS.cloud; };
+                const cardStyle = (item) => {
                     let bs = 'none';
-                    if (item.isLocalDownloaded)                        bs = '0 0 0 3px #10b981';
+                    if (item.isLocalDownloaded) bs = '0 0 0 3px #10b981';
                     else if (Object.keys(item.cloudDownloaded).length) bs = `0 0 0 3px ${getApiColor(Object.keys(item.cloudDownloaded)[0], configs)}`;
                     return { boxShadow: bs, background: '#111', border: '1px solid #2a2a2a', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', transition: 'transform 0.2s' };
                 };
-                const cardHover     = (ev, enter) => { ev.currentTarget.style.transform = enter ? 'scale(1.02)' : 'scale(1)'; ev.currentTarget.style.borderColor = enter ? '#555' : '#2a2a2a'; };
+                const cardHover = (ev, enter) => { ev.currentTarget.style.transform = enter ? 'scale(1.02)' : 'scale(1)'; ev.currentTarget.style.borderColor = enter ? '#555' : '#2a2a2a'; };
 
                 const posterSrc = (item) => {
                     const raw = item.poster || 'https://placehold.co/280x400?text=Sem+Capa';
@@ -1868,12 +1869,12 @@
                     return imageCache.value[raw];
                 };
                 const posterErr = (ev, item) => { ev.target.onerror = null; ev.target.src = item.poster || 'https://placehold.co/280x400?text=Erro'; };
-                const fmtDate   = (ts) => !ts ? 'Desconhecida' : new Date(ts).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const fmtDate = (ts) => !ts ? 'Desconhecida' : new Date(ts).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
                 const copyPoster = (item) => { GM_setClipboard(item.poster || "", { type: "text/plain" }); toast('Poster copiado!'); };
                 const hasWriteAccess = (item) => item.isLocal || item.sources.some(s => configs.find(c => c.name === s.name)?.apiKey);
 
                 const openEditModal = (item) => { editingItem.value = { ...item }; };
-                const saveEdit      = () => {
+                const saveEdit = () => {
                     if (!editingItem.value) return;
                     const it = { ...editingItem.value, updated_at: Date.now() };
                     [STORE_CATALOG, STORE_DOWNLOADED, STORE_DOWNLOAD_LIST].forEach(KEY => {
@@ -1887,7 +1888,7 @@
                 };
 
                 const openNoteModal = (item) => { editingNoteItem.value = { url: item.url, ft_extra_field: item.ft_extra_field || '' }; };
-                const saveNoteEdit  = () => {
+                const saveNoteEdit = () => {
                     if (!editingNoteItem.value) return;
                     const it = editingNoteItem.value, savedAt = Date.now();
                     let list = getStored(STORE_EXTRA_FIELD);
@@ -1907,7 +1908,7 @@
                         setStored(KEY, getStored(KEY).filter(u => u.url !== item.url));
                     });
                     dashboardData.value = dashboardData.value.filter(i => i.url !== item.url);
-                    pendingRef.value    = pendingRef.value.filter(i => i.url !== item.url);
+                    pendingRef.value = pendingRef.value.filter(i => i.url !== item.url);
                     await removeFromCloud(item.url);
                 };
 
@@ -1915,8 +1916,8 @@
                     const data = filtered.value;
                     if (!data.length) return toast('Nada para exportar.');
                     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-                    const url  = URL.createObjectURL(blob);
-                    const a    = document.createElement("a"); a.href = url; a.download = `ft_export_${data.length}_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href = url; a.download = `ft_export_${data.length}_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
                 };
 
                 return {
@@ -1934,7 +1935,7 @@
         window._ftDashScrapeProgress = (current, total) => {
             const st = app._instance?.setupState;
             if (st?.scrapeCurrent?.value !== undefined) st.scrapeCurrent.value = current;
-            if (st?.scrapeTotal?.value   !== undefined) st.scrapeTotal.value   = total;
+            if (st?.scrapeTotal?.value !== undefined) st.scrapeTotal.value = total;
         };
 
         window._ftDashUpdateItem = (url, title, poster, year) => {
@@ -1957,7 +1958,7 @@
     function openWorkerTutorialUI() {
         document.getElementById("ft-cloud-tutorial")?.remove();
 
-        const GITHUB_URL      = "https://github.com/Blackspirits/media-sync/blob/main/worker/worker.js";
+        const GITHUB_URL = "https://github.com/Blackspirits/media-sync/blob/main/worker/worker.js";
         const GITHUB_REPO_URL = "https://github.com/Blackspirits/media-sync";
 
         const mod = document.createElement("div");
@@ -1982,7 +1983,7 @@
         ];
         const stepsHtml = steps.map((s, i) =>
             `<li style="display:flex;align-items:flex-start;margin-bottom:11px;font-size:12.5px;color:#cbd5e1;line-height:1.5;">
-                <span style="${stepNumStyle}">${i+1}</span>
+                <span style="${stepNumStyle}">${i + 1}</span>
                 <span><b style="color:#f1f5f9;">${s[0]}</b>: ${s[1]}</span>
             </li>`
         ).join('');
@@ -2016,13 +2017,13 @@
             </div>
 
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-                ${btnLink("ft-tut-gh-link", GITHUB_URL,      "↗ Ver Worker no GitHub",     "rgba(37,99,235,.2)",    "rgba(37,99,235,.4)")}
-                ${btnLink("ft-tut-gh-repo", GITHUB_REPO_URL, "↗ Repositório completo",    "rgba(55,65,81,.4)",     "rgba(255,255,255,.12)")}
+                ${btnLink("ft-tut-gh-link", GITHUB_URL, "↗ Ver Worker no GitHub", "rgba(37,99,235,.2)", "rgba(37,99,235,.4)")}
+                ${btnLink("ft-tut-gh-repo", GITHUB_REPO_URL, "↗ Repositório completo", "rgba(55,65,81,.4)", "rgba(255,255,255,.12)")}
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 ${btnCopy("ft-tut-copy-secret", "Copiar nome do Secret (API_KEY)", "rgba(139,92,246,.15)", "rgba(139,92,246,.35)", "#c4b5fd")}
-                ${btnCopy("ft-tut-copy-kv",     "Copiar KV binding (MEDIA)",       "rgba(16,185,129,.15)", "rgba(16,185,129,.35)", "#6ee7b7")}
-                ${btnCopy("ft-tut-copy-pfx",    "Copiar prefixo (filmtwist_)",     "rgba(14,165,233,.15)", "rgba(14,165,233,.35)", "#7dd3fc")}
+                ${btnCopy("ft-tut-copy-kv", "Copiar KV binding (MEDIA)", "rgba(16,185,129,.15)", "rgba(16,185,129,.35)", "#6ee7b7")}
+                ${btnCopy("ft-tut-copy-pfx", "Copiar prefixo (filmtwist_)", "rgba(14,165,233,.15)", "rgba(14,165,233,.35)", "#7dd3fc")}
             </div>
         </div>`;
 
@@ -2032,16 +2033,16 @@
         const close = () => mod.remove();
         box.querySelector("#ft-tut-close").onclick = close;
         mod.addEventListener("click", (e) => { if (e.target === mod) close(); });
-        box.querySelector("#ft-tut-copy-secret").onclick = () => { GM_setClipboard("API_KEY",    { type: "text/plain" }); toast("Copiado: API_KEY"); };
-        box.querySelector("#ft-tut-copy-kv").onclick     = () => { GM_setClipboard("MEDIA",      { type: "text/plain" }); toast("Copiado: MEDIA"); };
-        box.querySelector("#ft-tut-copy-pfx").onclick    = () => { GM_setClipboard("filmtwist_", { type: "text/plain" }); toast("Copiado: filmtwist_"); };
+        box.querySelector("#ft-tut-copy-secret").onclick = () => { GM_setClipboard("API_KEY", { type: "text/plain" }); toast("Copiado: API_KEY"); };
+        box.querySelector("#ft-tut-copy-kv").onclick = () => { GM_setClipboard("MEDIA", { type: "text/plain" }); toast("Copiado: MEDIA"); };
+        box.querySelector("#ft-tut-copy-pfx").onclick = () => { GM_setClipboard("filmtwist_", { type: "text/plain" }); toast("Copiado: filmtwist_"); };
     }
 
     /* =====================================================================
        AUTO SCROLL
        ===================================================================== */
 
-    let autoScrolling   = false;
+    let autoScrolling = false;
     let autoScrollTimer = null;
 
     function stopAutoScroll(btn) {
@@ -2078,14 +2079,14 @@
        MENU COMMANDS
        ===================================================================== */
 
-    GM_registerMenuCommand("Guardar catálogo (Nuvem)",      saveHistory);
-    GM_registerMenuCommand("Copiar links visíveis",          copyLinksToClipboard);
-    GM_registerMenuCommand("Marcar Transferidos",            markCopiedAsDownloaded);
-    GM_registerMenuCommand("Reset Copiados",                 resetCopiedLinks);
-    GM_registerMenuCommand("Gerir APIs Cloud",               openApiManagerUI);
-    GM_registerMenuCommand("Exportar Backup (JSON)",         exportData);
-    GM_registerMenuCommand("Importar Backup (JSON)",         importData);
-    GM_registerMenuCommand("Scroll automático (ON/OFF)",     () => toggleAutoScroll(null));
+    GM_registerMenuCommand("Guardar catálogo (Nuvem)", saveHistory);
+    GM_registerMenuCommand("Copiar links visíveis", copyLinksToClipboard);
+    GM_registerMenuCommand("Marcar Transferidos", markCopiedAsDownloaded);
+    GM_registerMenuCommand("Reset Copiados", resetCopiedLinks);
+    GM_registerMenuCommand("Gerir APIs Cloud", openApiManagerUI);
+    GM_registerMenuCommand("Exportar Backup (JSON)", exportData);
+    GM_registerMenuCommand("Importar Backup (JSON)", importData);
+    GM_registerMenuCommand("Scroll automático (ON/OFF)", () => toggleAutoScroll(null));
 
     /* =====================================================================
        MIGRAÇÃO DE DADOS LEGACY (ft_* → filmtwist_*)
@@ -2093,10 +2094,10 @@
 
     function migrateLegacyKeys() {
         const migrations = [
-            ["ft_catalog",        STORE_CATALOG],
-            ["ft_downloaded",     STORE_DOWNLOADED],
-            ["ft_download_list",  STORE_DOWNLOAD_LIST],
-            ["ft_extra_field",    STORE_EXTRA_FIELD],
+            ["ft_catalog", STORE_CATALOG],
+            ["ft_downloaded", STORE_DOWNLOADED],
+            ["ft_download_list", STORE_DOWNLOAD_LIST],
+            ["ft_extra_field", STORE_EXTRA_FIELD],
         ];
         let migrated = 0;
         for (const [oldKey, newKey] of migrations) {
@@ -2119,15 +2120,15 @@
         // Migrar api_configs
         const oldApiKey = "ft_api_configs";
         const newApiKey = "filmtwist_api_configs";
-        const oldApi    = GM_getValue(oldApiKey, null);
-        const newApi    = GM_getValue(newApiKey, null);
+        const oldApi = GM_getValue(oldApiKey, null);
+        const newApi = GM_getValue(newApiKey, null);
         if (oldApi && !newApi) { GM_setValue(newApiKey, oldApi); GM_setValue(oldApiKey, "[]"); migrated++; }
         // Migrar hide/pos keys
         [
             ["ft_hide_downloaded_v1", "filmtwist_hide_downloaded_v1"],
-            ["ft_hide_history_v1",    "filmtwist_hide_history_v1"],
-            ["ft_ui_pos_v1",          "filmtwist_ui_pos_v1"],
-            ["ft_ui_min_v1",          "filmtwist_ui_min_v1"],
+            ["ft_hide_history_v1", "filmtwist_hide_history_v1"],
+            ["ft_ui_pos_v1", "filmtwist_ui_pos_v1"],
+            ["ft_ui_min_v1", "filmtwist_ui_min_v1"],
         ].forEach(([ok, nk]) => {
             const ov = GM_getValue(ok, null);
             const nv = GM_getValue(nk, null);
@@ -2140,9 +2141,9 @@
        INIT / AUTO UPDATES
        ===================================================================== */
 
-    let _tAuto    = 0;
+    let _tAuto = 0;
     let _observer = null;
-    let _inited   = false;
+    let _inited = false;
     let _needsFullScan = false;
 
     function scheduleUpdate() {

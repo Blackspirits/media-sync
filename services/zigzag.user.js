@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         RTP Play Zig Zag — Master Manager v2
-// @namespace    leinad4mind.github.io
-// @version      2.0.0
+// @name         RTP Play Zig Zag — Master Manager v3
+// @namespace    leinad4mind.top/forum
+// @version      3.0.0
 // @description  Dashboard, Gestão de API, Deep Scrape, Cloud Sync e muito mais.
 // @author       Leinad4Mind
 // @match        https://www.rtp.pt/play/zigzag/*
@@ -1004,7 +1004,7 @@
                             </h1>
                             <div style="color:#94a3b8;font-size:14px;margin-top:8px;font-weight:500;">Gestão global de multimédia local sincronizada na nuvem</div>
                         </div>
-                        
+
                         <div style="display:flex;gap:30px;align-items:center;">
                             <!-- FILTROS -->
                             <div style="display:flex;background:rgba(0,0,0,0.5);border-radius:10px;padding:4px;box-shadow:inset 0 2px 5px rgba(0,0,0,0.5);">

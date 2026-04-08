@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Filmin.pt — Gestor de Catálogo, Downloads & Sync Cloud
 // @namespace    blackspirits.github.io/
-// @version      5.5.18
+// @version      5.5.20
 // @description  Conta e guarda filmes/séries (pagos e gratuitos), sincroniza com Cloudflare Workers (multi-API), gere downloads e copiados, e apresenta uma Dashboard com filtros, poster HD, notas de séries e exportação.
 // @author       BlackSpirits & Leinad4Mind
 // @license      MIT
@@ -19,6 +19,8 @@
 /*
  * CHANGELOG
  * ─────────────────────────────────────────────────────────────────────────────
+ * v5.5.20 — Melhorias nos ícones (reversão para emojis no badge e correcções)
+ * v5.5.19 — Fix bug with SVG + Toggle (eye) para ocultar da vista as API keys.
  * v5.5.18 — Badge ícone: inline style idêntico ao FilmTwist + SVG style forçado
  *             (protege contra fill/stroke global do Filmin).
  * v5.5.17 — Badge ícone: classe CSS dedicada com !important para SVG (protege contra
