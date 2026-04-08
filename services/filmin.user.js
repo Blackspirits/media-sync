@@ -1947,7 +1947,10 @@
                     <input id="new-api-name" placeholder="Nome (ex: Eu, João)" style="${inputCSS}margin-bottom:8px;">
                     <input id="new-api-url"  placeholder="URL (ex: https://api.exemplo.workers.dev)" style="${inputCSS}margin-bottom:8px;">
                     <div style="display:flex;gap:6px;margin-bottom:12px;align-items:stretch;">
-                        <input type="password" id="new-api-key" placeholder="API Key Secreta (opcional — write access)" style="${inputCSS}margin-bottom:0;flex:1;">
+                        <div style="position:relative;flex:1;display:flex;">
+                            <input type="password" id="new-api-key" placeholder="API Key Secreta (opcional — write access)" style="${inputCSS}margin-bottom:0;flex:1;padding-right:36px;">
+                            <button type="button" id="filmin-api-eye-key" title="Mostrar/Esconder Password" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:#94a3b8;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;padding:4px;">👓</button>
+                        </div>
                         <button type="button" id="filmin-api-gen-key" title="Gerar chave aleatória segura"
                             style="padding:0 12px;background:rgba(0,224,164,.15);color:#6ee7b7;border:1px solid rgba(0,224,164,.3);border-radius:8px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;font-family:inherit;">✦ Gerar</button>
                     </div>
@@ -1963,6 +1966,15 @@
                     </div>
                 </div>
             </div>`;
+
+            // Eye toggle for API password
+            const eyeBtn = box.querySelector("#filmin-api-eye-key");
+            if (eyeBtn) {
+                eyeBtn.onclick = () => {
+                    const inp = box.querySelector("#new-api-key");
+                    inp.type = inp.type === "password" ? "text" : "password";
+                };
+            }
 
             // Generate random secure API key
             const genBtn = box.querySelector("#filmin-api-gen-key");
@@ -2234,7 +2246,7 @@
   <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;width:100%;margin-bottom:14px;">
     <div v-for="(v,l) in statCards" :key="l"
          style="background:rgba(255,255,255,.03);padding:14px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:10px;">
-      <div :style="{background:v.color+'1a',borderColor:v.color+'44'}" style="width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;border:1px solid;flex-shrink:0;">{{ v.icon }}</div>
+      <div :style="{background:v.color+'1a',borderColor:v.color+'44'}" style="width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;border:1px solid;flex-shrink:0;" v-html="v.icon"></div>
       <div>
         <div :style="{color:v.color}" style="font-size:22px;font-weight:700;line-height:1;">{{ v.count }}</div>
         <div style="font-size:10px;color:#94a3b8;margin-top:2px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;">{{ l }}</div>
@@ -2308,8 +2320,8 @@
         </a>
         <div style="position:absolute;top:8px;left:8px;display:flex;flex-wrap:wrap;width:86%;pointer-events:none;">
           <span v-for="src in item.sources" :key="src.name" :style="{color:src.color,borderStyle:item.cloudDownloaded[src.name]?'solid':'dashed'}"
-                style="background:rgba(0,0,0,.88);padding:2px 6px;border-radius:4px;font-size:9.5px;margin-right:4px;margin-bottom:4px;border-width:1px;border-color:rgba(255,255,255,.15);font-weight:600;letter-spacing:.04em;">
-            {{ badgeIcons(item,src.name) }} {{ src.name }}
+                style="display:flex;align-items:center;gap:3px;background:rgba(0,0,0,.88);padding:2px 6px;border-radius:4px;font-size:9.5px;margin-right:4px;margin-bottom:4px;border-width:1px;border-color:rgba(255,255,255,.15);font-weight:600;letter-spacing:.04em;">
+            <span v-html="badgeIcons(item,src.name)" style="display:flex;align-items:center;"></span> {{ src.name }}
           </span>
           <span v-if="item.isLocal" style="background:rgba(0,0,0,.88);color:#10b981;padding:2px 6px;border-radius:4px;font-size:9.5px;margin-right:4px;margin-bottom:4px;border:1px solid rgba(16,185,129,.3);font-weight:600;">Local</span>
         </div>
@@ -2454,7 +2466,7 @@
                 const toggleView    = () => { viewMode.value = viewMode.value === 'card' ? 'poster' : 'card'; safeLSSet(STORE_DASH_VIEW_MODE, viewMode.value); };
                 const close         = () => { delete window._filminDashUpdateItem; delete window._filminDashScrapeProgress; revokeAllObjectURLs(); mod.remove(); };
                 const isSaved       = (item) => item.isLocalDownloaded || Object.keys(item.cloudDownloaded).length > 0;
-                const badgeIcons    = (item, srcName) => { let i = ''; if (item.cloudDownloaded[srcName]) i += ICONS.download; if (item.cloudHistory[srcName]) i += ICONS.history; return i || ICONS.cloud; };
+                const badgeIcons    = (item, srcName) => ICONS.cloud;
                 const cardStyle     = (item) => {
                     let bs = 'none';
                     if (item.isLocalDownloaded)                        bs = '0 0 0 3px #10b981';
