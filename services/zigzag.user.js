@@ -171,8 +171,8 @@
                 const res = await fetch(`${api.url}?keys=${STORE_CATALOG},${STORE_LOCAL},${STORE_SELECTED}`, { headers: hdrs });
                 if (!res.ok) continue;
                 let data = null;
-                try { data = await res.json(); } catch(e) { continue; }
-                
+                try { data = await res.json(); } catch (e) { continue; }
+
                 if (data && typeof data === 'object' && !Array.isArray(data)) {
                     if (data[STORE_LOCAL] && Array.isArray(data[STORE_LOCAL])) {
                         data[STORE_LOCAL].forEach(id => { if (!locArray.includes(id)) { locArray.push(id); updated = true; } });
@@ -299,7 +299,7 @@
                         if (!allLinks.includes(p.url)) allLinks.push(p.url);
                         const pId = getZZID(p.url);
                         const existingIndex = updatedCatalog.findIndex(c => c.id === pId);
-                        
+
                         if (existingIndex === -1) {
                             updatedCatalog.push({
                                 id: pId, parentId: targets[i].parentId || targets[i].id, url: p.url,
@@ -729,7 +729,7 @@
         let editIndex = -1;
         let configs = getApiConfigs();
 
-        const generateKey = () => Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2,'0')).join('');
+        const generateKey = () => Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
 
         const renderSetup = () => {
             const api = editIndex >= 0 ? configs[editIndex] : { name: '', url: '', apiKey: '', noCopy: false, noHide: false };
@@ -787,8 +787,8 @@
                 </div>
             </div>`;
 
-            box.querySelector("#zz-close-mgr").onclick = () => { mod.remove(); if(editIndex >= 0) { editIndex = -1; renderList(); } };
-            
+            box.querySelector("#zz-close-mgr").onclick = () => { mod.remove(); if (editIndex >= 0) { editIndex = -1; renderList(); } };
+
             box.querySelector("#zz-gen-key").onclick = () => {
                 const kInput = box.querySelector("#api-k");
                 kInput.value = generateKey();
@@ -842,7 +842,7 @@
                         <button class="zz-api-del" data-idx="${idx}" style="background:rgba(220,38,38,.2);color:#fca5a5;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:11px;">✖</button>
                     </div>
                 </div>`).join('');
-            
+
             box.innerHTML = `
                 <div style="padding:20px;border-bottom:1px solid rgba(255,255,255,.07);font-weight:800;background:linear-gradient(105deg,${ACCENT_COLOR}22,transparent);display:flex;justify-content:space-between;align-items:center;">
                     Gestor de Nuvens Híbridas
@@ -853,26 +853,26 @@
                     <button id="zz-new-api-btn" style="width:100%;padding:14px;background:rgba(255,255,255,0.05);color:white;border:1px dashed rgba(255,255,255,0.2);border-radius:10px;cursor:pointer;font-weight:bold;transition:0.3s;">+ ADICIONAR NOVA NUVEM</button>
                 </div>
             `;
-            
+
             box.querySelector("#zz-close-mgr").onclick = () => mod.remove();
             box.querySelector("#zz-new-api-btn").onclick = () => renderSetup();
 
-            box.querySelectorAll(".zz-api-del").forEach(b => b.onclick = () => { 
+            box.querySelectorAll(".zz-api-del").forEach(b => b.onclick = () => {
                 if (confirm("Garantia: O Cloudflare Worker em si não será apagado, apagas apenas de sincronizar desta tab. Continuar?")) {
-                    configs.splice(b.dataset.idx, 1); 
-                    GM_setValue(STORE_API_CONFIGS, __obf(JSON.stringify(configs))); 
-                    renderList(); 
+                    configs.splice(b.dataset.idx, 1);
+                    GM_setValue(STORE_API_CONFIGS, __obf(JSON.stringify(configs)));
+                    renderList();
                 }
             });
 
-            box.querySelectorAll(".zz-api-edit").forEach(b => b.onclick = () => { 
+            box.querySelectorAll(".zz-api-edit").forEach(b => b.onclick = () => {
                 editIndex = parseInt(b.dataset.idx);
                 renderSetup();
             });
         };
 
-        renderList(); 
-        mod.appendChild(box); 
+        renderList();
+        mod.appendChild(box);
         document.body.appendChild(mod);
     }
 
@@ -886,6 +886,32 @@
         let locIds = getStored(STORE_LOCAL);
         let currentFilter = 'all'; // 'all', 'local', 'missing'
         let currentParentContext = null; // null = visa root; string (id) = vista nested
+
+        const zzState = { cloudLoading: true, cloudSet: new Set(), cloudCatSet: new Set() };
+
+        const fetchPureCloudStats = async () => {
+            const configs = getApiConfigs();
+            if (configs.length === 0) { zzState.cloudLoading = false; return; }
+            for (const api of configs) {
+                try {
+                    const hdrs = api.apiKey ? { "x-api-key": api.apiKey } : undefined;
+                    const res = await fetch(`${api.url}?keys=${STORE_LOCAL},${STORE_CATALOG}`, { headers: hdrs });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && Array.isArray(data[STORE_LOCAL])) {
+                            data[STORE_LOCAL].forEach(id => zzState.cloudSet.add(id));
+                        }
+                        if (data && Array.isArray(data[STORE_CATALOG])) {
+                            data[STORE_CATALOG].forEach(i => zzState.cloudCatSet.add(i.id));
+                        }
+                    }
+                } catch (e) { }
+            }
+            zzState.cloudLoading = false;
+            const statDom = document.getElementById('zz-cloud-stat-num');
+            if (statDom) statDom.innerHTML = `${zzState.cloudSet.size}<span style="font-size:14px;color:#475569;"> / ${zzState.cloudCatSet.size}</span>`;
+        };
+        fetchPureCloudStats();
 
         const isSelected = (id) => selIds.includes(id);
         const isLocal = (id) => locIds.includes(id);
@@ -906,7 +932,7 @@
                 contextItems = items.filter(i => i.parentId === currentParentContext && i.id !== currentParentContext);
                 const parentInfo = rootProgs.find(p => p.id === currentParentContext);
                 const parentTitle = parentInfo ? parentInfo.title : 'Série';
-                
+
                 breadcrumbHtml = `
                 <div style="margin-bottom:20px;display:flex;align-items:center;gap:15px;">
                     <button id="zz-dash-back" style="background:rgba(255,255,255,0.05);color:white;border:1px solid rgba(255,255,255,0.1);padding:10px 20px;border-radius:10px;cursor:pointer;font-weight:700;transition:0.3s;display:flex;align-items:center;gap:8px;">
@@ -974,7 +1000,7 @@
                         <div>
                             <h1 style="margin:0;font-size:28px;font-weight:900;background:linear-gradient(to right, #38bdf8, #818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;display:flex;align-items:center;gap:15px;">
                                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                                ZigZag Premium Manager
+                                ZigZag Manager
                             </h1>
                             <div style="color:#94a3b8;font-size:14px;margin-top:8px;font-weight:500;">Gestão global de multimédia local sincronizada na nuvem</div>
                         </div>
@@ -997,9 +1023,15 @@
                                     <div style="font-size:24px;font-weight:900;color:#34d399;">${localEps}<span style="font-size:14px;color:#475569;"> / ${epsOnly.length}</span></div>
                                     <div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:1px;text-transform:uppercase;">Episódios Locais</div>
                                 </div>
+                                <div style="width:1px;background:rgba(255,255,255,0.1);"></div>
+                                <div>
+                                    <div id="zz-cloud-stat-num" style="font-size:24px;font-weight:900;color:#38bdf8;">${zzState.cloudLoading ? '...' : `${zzState.cloudSet.size}<span style="font-size:14px;color:#475569;"> / ${zzState.cloudCatSet.size}</span>`}</div>
+                                    <div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:1px;text-transform:uppercase;">Itens na Nuvem</div>
+                                </div>
                             </div>
-                            <!-- CLOSE BTN -->
-                            <button id="zz-dash-close" style="background:rgba(255,255,255,0.05);color:white;border:1px solid rgba(255,255,255,0.1);padding:14px 28px;border-radius:12px;cursor:pointer;font-weight:800;transition:0.3s;box-shadow:0 8px 20px rgba(0,0,0,0.2);">X FECHAR</button>
+                            <!-- AÇÕES -->
+                            <button id="zz-dash-sync" style="background:rgba(56,189,248,0.1);color:#38bdf8;border:1px solid rgba(56,189,248,0.2);padding:14px 22px;border-radius:12px;cursor:pointer;font-weight:800;transition:0.3s;box-shadow:0 8px 20px rgba(0,0,0,0.2);">☁️ SINC CLOUD</button>
+                            <button id="zz-dash-close" style="background:rgba(255,255,255,0.05);color:white;border:1px solid rgba(255,255,255,0.1);padding:14px 22px;border-radius:12px;cursor:pointer;font-weight:800;transition:0.3s;box-shadow:0 8px 20px rgba(0,0,0,0.2);">X FECHAR</button>
                         </div>
                     </div>
 
@@ -1028,7 +1060,22 @@
             `;
 
             overlay.querySelector('#zz-dash-close').onclick = () => overlay.remove();
-            
+
+            const syncBtn = overlay.querySelector('#zz-dash-sync');
+            if (syncBtn) {
+                syncBtn.onclick = async () => {
+                    syncBtn.innerHTML = "⏳ A SINCRONIZAR...";
+                    syncBtn.style.pointerEvents = "none";
+                    await fetchCloudData();
+                    await saveToCloud();
+                    await fetchPureCloudStats();
+                    items = getStored(STORE_CATALOG);
+                    selIds = getStored(STORE_SELECTED);
+                    locIds = getStored(STORE_LOCAL);
+                    render();
+                };
+            }
+
             const backBtn = overlay.querySelector('#zz-dash-back');
             if (backBtn) {
                 backBtn.onclick = () => {
@@ -1043,14 +1090,14 @@
                     render();
                 };
             });
-            
+
             overlay.querySelectorAll('.zz-filter-btn').forEach(btn => {
                 btn.onclick = (e) => {
                     currentFilter = e.target.getAttribute('data-filter');
                     render();
                 };
             });
-            
+
             overlay.querySelectorAll('.zz-remove-item').forEach(btn => {
                 btn.onclick = async (e) => {
                     const id = e.target.getAttribute('data-id');
@@ -1060,14 +1107,14 @@
                         dependents.add(child.id);
                         items.filter(sub => sub.url.startsWith(child.url) && sub.id !== child.id).forEach(sub => dependents.add(sub.id));
                     });
-                    
+
                     const depArray = Array.from(dependents);
                     currentLocal = currentLocal.filter(i => i !== id && !depArray.includes(i));
-                    
+
                     setStored(STORE_LOCAL, currentLocal);
-                    locIds = currentLocal; 
+                    locIds = currentLocal;
                     saveToCloud(); highlightCards(); updateStats();
-                    render(); 
+                    render();
                 }
             });
 
@@ -1075,7 +1122,7 @@
                 btn.onclick = async (e) => {
                     const id = e.target.getAttribute('data-id');
                     let currentLocal = getStored(STORE_LOCAL);
-                    
+
                     if (!currentLocal.includes(id)) currentLocal.push(id);
 
                     const dependents = new Set();
@@ -1083,10 +1130,10 @@
                         dependents.add(child.id);
                         items.filter(sub => sub.url.startsWith(child.url) && sub.id !== child.id).forEach(sub => dependents.add(sub.id));
                     });
-                    
+
                     const depArray = Array.from(dependents);
                     depArray.forEach(d => { if (!currentLocal.includes(d)) currentLocal.push(d); });
-                    
+
                     setStored(STORE_LOCAL, currentLocal);
                     locIds = currentLocal;
                     saveToCloud(); highlightCards(); updateStats();
