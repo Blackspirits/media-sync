@@ -676,15 +676,153 @@
         const box = document.createElement("div");
         box.style.cssText = `background:#0a0e16;border:1px solid rgba(255,255,255,.1);width:600px;border-radius:16px;color:#e2e8f0;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.7);`;
 
-        const renderList = () => {
-            const configs = getApiConfigs();
-            let listHtml = configs.map((api, idx) => `<div style="background:rgba(255,255,255,.03);padding:12px;border-radius:10px;margin-bottom:8px;border:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:13px;font-weight:700;color:${ACCENT_COLOR};">${api.name}</div><div style="font-size:10px;color:#475569;">${api.url}</div></div><button class="zz-api-del" data-idx="${idx}" style="background:rgba(220,38,38,.2);color:#fca5a5;border:none;padding:5px 10px;border-radius:6px;cursor:pointer;">Remover</button></div>`).join('');
-            box.innerHTML = `<div style="padding:16px;border-bottom:1px solid rgba(255,255,255,.07);font-weight:800;background:linear-gradient(105deg,${ACCENT_COLOR}22,transparent);">GERIR APIs CLOUD</div><div style="padding:20px;"><div id="zz-api-list">${listHtml || '<div style="text-align:center;font-size:12px;color:#64748b;">Nenhuma nuvem ligada.</div>'}</div><div style="margin-top:15px;padding-top:15px;border-top:1px solid rgba(255,255,255,0.05);"><input id="new-api-n" placeholder="Nome" style="width:100%;padding:8px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;margin-bottom:8px;"><input id="new-api-u" placeholder="URL Worker" style="width:100%;padding:8px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;margin-bottom:8px;"><input id="new-api-k" type="password" placeholder="API Key" style="width:100%;padding:8px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;margin-bottom:15px;"><div style="display:flex;gap:8px;"><button id="zz-save-api" style="flex:1;padding:10px;background:${ACCENT_COLOR};border:none;border-radius:8px;font-weight:bold;cursor:pointer;color:#fff;">Guardar</button><button id="zz-close-mgr" style="padding:10px;background:#334155;border:none;border-radius:8px;cursor:pointer;color:#fff;">Fechar</button></div></div></div>`;
-            box.querySelector("#zz-close-mgr").onclick = () => mod.remove();
-            box.querySelector("#zz-save-api").onclick = () => { const n = box.querySelector("#new-api-n").value, u = box.querySelector("#new-api-u").value, k = box.querySelector("#new-api-k").value; if (n && u) { configs.push({ name: n, url: u, apiKey: k }); GM_setValue(STORE_API_CONFIGS, __obf(JSON.stringify(configs))); renderList(); } };
-            box.querySelectorAll(".zz-api-del").forEach(b => b.onclick = () => { configs.splice(b.dataset.idx, 1); GM_setValue(STORE_API_CONFIGS, __obf(JSON.stringify(configs))); renderList(); });
+        let editIndex = -1;
+        let configs = getApiConfigs();
+
+        const generateKey = () => Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2,'0')).join('');
+
+        const renderSetup = () => {
+            const api = editIndex >= 0 ? configs[editIndex] : { name: '', url: '', apiKey: '', noCopy: false, noHide: false };
+
+            const isEdit = editIndex >= 0;
+            box.innerHTML = `
+            <div style="padding:20px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;justify-content:space-between;align-items:center;background:linear-gradient(105deg,rgba(59,130,246,0.1),transparent);">
+                <h2 style="margin:0;font-size:18px;font-weight:800;color:#f8fafc;">${isEdit ? 'Editar Automação Cloud' : 'Nova Automação Cloud'}</h2>
+                <button id="zz-close-mgr" style="background:transparent;border:none;color:#94a3b8;cursor:pointer;font-size:18px;font-weight:bold;">✖</button>
+            </div>
+            <div style="padding:25px;display:flex;flex-direction:column;gap:20px;">
+                <!-- Passo 1 -->
+                <div>
+                    <div style="font-size:13px;font-weight:800;color:${ACCENT_COLOR};margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                        <div style="background:rgba(59,130,246,0.2);color:#38bdf8;padding:2px 8px;border-radius:10px;font-size:10px;">PASSO 1</div> Endpoint do Worker
+                    </div>
+                    <div style="display:flex;gap:10px;">
+                        <input id="api-n" placeholder="Nome de Referência (ex: Worker Principal)" value="${api.name}" style="flex:1;padding:12px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-family:monospace;font-size:13px;">
+                    </div>
+                    <input id="api-u" placeholder="https://media-sync-api.teu-user.workers.dev" value="${api.url}" style="width:100%;padding:12px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;margin-top:10px;font-family:monospace;font-size:13px;">
+                </div>
+
+                <!-- Passo 2 -->
+                <div>
+                    <div style="font-size:13px;font-weight:800;color:${ACCENT_COLOR};margin-bottom:8px;display:flex;align-items:center;gap:6px;justify-content:space-between;">
+                        <span style="display:flex;align-items:center;gap:6px;"><div style="background:rgba(59,130,246,0.2);color:#38bdf8;padding:2px 8px;border-radius:10px;font-size:10px;">PASSO 2</div> Chave Criptográfica Secreta</span>
+                        <button id="zz-gen-key" style="background:rgba(16,185,129,0.2);color:#34d399;border:1px solid rgba(16,185,129,0.3);padding:4px 10px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:bold;">Gerar Nova</button>
+                    </div>
+                    <div style="display:flex;gap:10px;position:relative;">
+                        <input id="api-k" type="password" placeholder="Key (x-api-key)" value="${api.apiKey}" style="width:100%;padding:12px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-family:monospace;font-size:13px;">
+                        <button id="zz-eye-pw" style="position:absolute;right:10px;top:10px;background:transparent;border:none;color:#94a3b8;cursor:pointer;">👓</button>
+                    </div>
+                </div>
+
+                <!-- Passo 3 -->
+                <div>
+                    <div style="font-size:13px;font-weight:800;color:${ACCENT_COLOR};margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                        <div style="background:rgba(59,130,246,0.2);color:#38bdf8;padding:2px 8px;border-radius:10px;font-size:10px;">PASSO 3</div> Preferências de Sincronização
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);padding:15px;border-radius:10px;border:1px solid rgba(255,255,255,0.05);display:flex;flex-direction:column;gap:10px;">
+                        <label style="display:flex;align-items:center;cursor:pointer;font-size:13px;color:#cbd5e1;gap:10px;">
+                            <input type="checkbox" id="api-nocopy" ${api.noCopy ? 'checked' : ''} style="width:16px;height:16px;accent-color:${ACCENT_COLOR};">
+                            Não extrair o catálogo desta nuvem (Só enviar)
+                        </label>
+                        <label style="display:flex;align-items:center;cursor:pointer;font-size:13px;color:#cbd5e1;gap:10px;">
+                            <input type="checkbox" id="api-nohide" ${api.noHide ? 'checked' : ''} style="width:16px;height:16px;accent-color:${ACCENT_COLOR};">
+                            Não esconder os vídeos desta nuvem (Ignorar filtro "Ocultar Locais")
+                        </label>
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:10px;margin-top:10px;">
+                    <button id="zz-save-api" style="flex:1;padding:14px;background:linear-gradient(to right, #38bdf8, #818cf8);color:white;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:14px;box-shadow:0 8px 20px rgba(56,189,248,0.3);">Gravar Automação</button>
+                    ${isEdit ? `<button id="zz-cancel-edit" style="padding:14px;background:rgba(255,255,255,0.05);color:#cbd5e1;border:1px solid rgba(255,255,255,0.1);border-radius:10px;cursor:pointer;font-weight:bold;">Cancelar</button>` : ''}
+                </div>
+            </div>`;
+
+            box.querySelector("#zz-close-mgr").onclick = () => { mod.remove(); if(editIndex >= 0) { editIndex = -1; renderList(); } };
+            
+            box.querySelector("#zz-gen-key").onclick = () => {
+                const kInput = box.querySelector("#api-k");
+                kInput.value = generateKey();
+                kInput.type = "text";
+            };
+
+            const eyeBtn = box.querySelector("#zz-eye-pw");
+            if (eyeBtn) eyeBtn.onclick = () => {
+                const k = box.querySelector("#api-k");
+                k.type = k.type === "password" ? "text" : "password";
+            };
+
+            if (isEdit) {
+                box.querySelector("#zz-cancel-edit").onclick = () => { editIndex = -1; renderList(); };
+            }
+
+            box.querySelector("#zz-save-api").onclick = () => {
+                const n = box.querySelector("#api-n").value;
+                const u = box.querySelector("#api-u").value;
+                const k = box.querySelector("#api-k").value;
+                const nc = box.querySelector("#api-nocopy").checked;
+                const nh = box.querySelector("#api-nohide").checked;
+
+                if (n && u) {
+                    const newObj = { name: n, url: u, apiKey: k, noCopy: nc, noHide: nh };
+                    if (isEdit) configs[editIndex] = newObj; else configs.push(newObj);
+                    GM_setValue(STORE_API_CONFIGS, __obf(JSON.stringify(configs)));
+                    editIndex = -1;
+                    renderList();
+                } else {
+                    toast("Nome e Worker URL são obrigatórios.");
+                }
+            };
         };
-        renderList(); mod.appendChild(box); document.body.appendChild(mod);
+
+        const renderList = () => {
+            configs = getApiConfigs();
+            let listHtml = configs.map((api, idx) => `
+                <div style="background:rgba(255,255,255,.03);padding:15px;border-radius:12px;margin-bottom:10px;border:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;align-items:center;transition:0.2s;">
+                    <div>
+                        <div style="font-size:14px;font-weight:800;color:${ACCENT_COLOR};margin-bottom:3px;display:flex;align-items:center;gap:8px;">
+                            ${api.name}
+                            ${api.noCopy ? '<span style="background:rgba(239,68,68,0.2);color:#fca5a5;padding:2px 6px;border-radius:6px;font-size:9px;">NoCopy</span>' : ''}
+                            ${api.noHide ? '<span style="background:rgba(245,158,11,0.2);color:#fcd34d;padding:2px 6px;border-radius:6px;font-size:9px;">NoHide</span>' : ''}
+                        </div>
+                        <div style="font-size:11px;color:#475569;font-family:monospace;">${api.url}</div>
+                    </div>
+                    <div style="display:flex;gap:5px;">
+                        <button class="zz-api-edit" data-idx="${idx}" style="background:rgba(59,130,246,.2);color:#93c5fd;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:11px;">Editar</button>
+                        <button class="zz-api-del" data-idx="${idx}" style="background:rgba(220,38,38,.2);color:#fca5a5;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:11px;">✖</button>
+                    </div>
+                </div>`).join('');
+            
+            box.innerHTML = `
+                <div style="padding:20px;border-bottom:1px solid rgba(255,255,255,.07);font-weight:800;background:linear-gradient(105deg,${ACCENT_COLOR}22,transparent);display:flex;justify-content:space-between;align-items:center;">
+                    Gestor de Nuvens Híbridas
+                    <button id="zz-close-mgr" style="background:transparent;border:none;color:#94a3b8;cursor:pointer;font-size:18px;font-weight:bold;">✖</button>
+                </div>
+                <div style="padding:20px;">
+                    <div id="zz-api-list" style="margin-bottom:20px;max-height:400px;overflow-y:auto;">${listHtml || '<div style="text-align:center;font-size:13px;color:#475569;margin:20px 0;">Nenhuma automação na nuvem configurada. Trabalharás apenas em Local Storage da aba.</div>'}</div>
+                    <button id="zz-new-api-btn" style="width:100%;padding:14px;background:rgba(255,255,255,0.05);color:white;border:1px dashed rgba(255,255,255,0.2);border-radius:10px;cursor:pointer;font-weight:bold;transition:0.3s;">+ ADICIONAR NOVA NUVEM</button>
+                </div>
+            `;
+            
+            box.querySelector("#zz-close-mgr").onclick = () => mod.remove();
+            box.querySelector("#zz-new-api-btn").onclick = () => renderSetup();
+
+            box.querySelectorAll(".zz-api-del").forEach(b => b.onclick = () => { 
+                if (confirm("Garantia: O Cloudflare Worker em si não será apagado, apagas apenas de sincronizar desta tab. Continuar?")) {
+                    configs.splice(b.dataset.idx, 1); 
+                    GM_setValue(STORE_API_CONFIGS, __obf(JSON.stringify(configs))); 
+                    renderList(); 
+                }
+            });
+
+            box.querySelectorAll(".zz-api-edit").forEach(b => b.onclick = () => { 
+                editIndex = parseInt(b.dataset.idx);
+                renderSetup();
+            });
+        };
+
+        renderList(); 
+        mod.appendChild(box); 
+        document.body.appendChild(mod);
     }
 
     async function openDashboard() {
