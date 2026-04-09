@@ -10,8 +10,9 @@ Arquitetura: **1 Cloudflare Worker** (backend partilhado) + **1 userscript por s
 
 | Script | Versão |
 |---|---|
-| `services/filmin.user.js` | v5.5.18 |
-| `services/filmtwist.user.js` | v1.8.1 |
+| `services/filmin.user.js` | v5.5.20 |
+| `services/filmtwist.user.js` | v1.8.2 |
+| `services/zigzag.user.js` | v3.0.0 |
 | `services/simkl-watched.user.js` | v1.0.3 |
 | `worker/worker.js` | v1.1.0 |
 
@@ -27,6 +28,7 @@ media-sync/
 ├── services/
 │   ├── filmin.user.js              # Filmin.pt — catálogo, downloads, cloud sync
 │   ├── filmtwist.user.js           # FilmTwist.pt — catálogo, downloads, cloud sync
+│   ├── zigzag.user.js              # RTP Play Zig Zag — catálogo, cloud sync
 │   └── simkl-watched.user.js       # Todos os sites — overlay "Visto" via API Simkl
 └── README.md
 ```
@@ -51,6 +53,7 @@ media-sync/
 | Prime Video | `prime_` | — em breve |
 | Opto | `opto_` | — em breve |
 | RTP Play | `rtp_` | — em breve |
+| RTP Play Zig Zag | `rtp_` ou `zigzag_` | `services/zigzag.user.js` |
 | TVI Player | `tvi_` | — em breve |
 
 ### Script de overlay Simkl (independente, sem Worker)

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Filmin.pt — Gestor de Catálogo, Downloads & Sync Cloud
 // @namespace    blackspirits.github.io/
-// @version      5.5.18
+// @version      5.5.20
 // @description  Conta e guarda filmes/séries (pagos e gratuitos), sincroniza com Cloudflare Workers (multi-API), gere downloads e copiados, e apresenta uma Dashboard com filtros, poster HD, notas de séries e exportação.
 // @author       BlackSpirits & Leinad4Mind
 // @license      MIT
@@ -19,6 +19,8 @@
 /*
  * CHANGELOG
  * ─────────────────────────────────────────────────────────────────────────────
+ * v5.5.20 — Melhorias nos ícones (reversão para emojis no badge e correcções)
+ * v5.5.19 — Fix bug with SVG + Toggle (eye) para ocultar da vista as API keys.
  * v5.5.18 — Badge ícone: inline style idêntico ao FilmTwist + SVG style forçado
  *             (protege contra fill/stroke global do Filmin).
  * v5.5.17 — Badge ícone: classe CSS dedicada com !important para SVG (protege contra
@@ -163,14 +165,14 @@
        ===================================================================== */
 
     // Chaves do localStorage / GM_getValue
-    const STORE_CATALOG_PAID       = "filmin_catalog_paid";
-    const STORE_CATALOG_FREE       = "filmin_catalog_free";
-    const STORE_DOWNLOADED_FREE    = "filmin_downloaded_free";
-    const STORE_DOWNLOADED_PAID    = "filmin_downloaded_paid";
-    const STORE_DASH_VIEW_MODE     = "filmin_dash_view_mode";
+    const STORE_CATALOG_PAID = "filmin_catalog_paid";
+    const STORE_CATALOG_FREE = "filmin_catalog_free";
+    const STORE_DOWNLOADED_FREE = "filmin_downloaded_free";
+    const STORE_DOWNLOADED_PAID = "filmin_downloaded_paid";
+    const STORE_DASH_VIEW_MODE = "filmin_dash_view_mode";
     const STORE_DOWNLOAD_COPY_FREE = "filmin_download_list";
-    const STORE_API_CONFIGS        = "filmin_api_configs";
-    const STORE_EXTRA_FIELD        = "filmin_extra_field";
+    const STORE_API_CONFIGS = "filmin_api_configs";
+    const STORE_EXTRA_FIELD = "filmin_extra_field";
 
     // Chaves de UI persistente
     const UI_POS_KEY = "filmin_ui_pos_v6";
@@ -201,27 +203,27 @@
        ESTADO GLOBAL
        ===================================================================== */
 
-    let cloudSaves       = {};   // url → [apiName, ...]
-    let cloudFullData    = [];   // todos os itens recebidos das clouds
+    let cloudSaves = {};   // url → [apiName, ...]
+    let cloudFullData = [];   // todos os itens recebidos das clouds
     let cloudExtraFields = [];   // campo extra (notas de séries) das clouds
-    let _cloudFetchSeq   = 0;    // token de sequência — descarta fetches obsoletos
+    let _cloudFetchSeq = 0;    // token de sequência — descarta fetches obsoletos
     let isScrapingMetadata = false;
 
     // Flags de ocultação — persistidas entre sessões
     let hideDownloaded = GM_getValue("filmin_hide_downloaded_v1", false);
-    let hidePaid       = GM_getValue("filmin_hide_paid_v1",       false);
-    let hideHistory    = GM_getValue("filmin_hide_history_v1",    false);
+    let hidePaid = GM_getValue("filmin_hide_paid_v1", false);
+    let hideHistory = GM_getValue("filmin_hide_history_v1", false);
 
     /* =====================================================================
        CACHE DE IMAGENS (IndexedDB)
        Evita re-download de posters já visitados.
        ===================================================================== */
 
-    const IMG_DB_NAME    = "filmin_img_cache_db";
+    const IMG_DB_NAME = "filmin_img_cache_db";
     const IMG_STORE_NAME = "images";
 
     // Mapa de objectURLs criados — necessário para revogar e evitar memory leak
-    const _objUrls  = new Map();
+    const _objUrls = new Map();
     const OBJ_URL_CAP = 400;   // máximo de entradas antes de despejar as mais antigas
 
     /**
@@ -268,7 +270,7 @@
                     db.createObjectStore(IMG_STORE_NAME);
             };
             req.onsuccess = () => resolve(req.result);
-            req.onerror   = () => { _imgDbPromise = null; reject(req.error); };
+            req.onerror = () => { _imgDbPromise = null; reject(req.error); };
         }).catch(err => { _imgDbPromise = null; throw err; });
         return _imgDbPromise;
     }
@@ -278,10 +280,10 @@
         try {
             const db = await openImageDB();
             return new Promise((resolve) => {
-                const tx   = db.transaction(IMG_STORE_NAME, "readonly");
+                const tx = db.transaction(IMG_STORE_NAME, "readonly");
                 const getR = tx.objectStore(IMG_STORE_NAME).get(url);
                 getR.onsuccess = () => resolve(getR.result || null);
-                getR.onerror   = () => resolve(null);
+                getR.onerror = () => resolve(null);
             });
         } catch { return null; }
     }
@@ -364,13 +366,13 @@
        HELPERS GENÉRICOS
        ===================================================================== */
 
-    const toObj     = (item) => {
+    const toObj = (item) => {
         if (!item) return null;
         if (typeof item === "string") return { url: item, title: "", poster: "" };
         if (typeof item === "object") return item;
         return null;
     };
-    const safeTrim  = (s) => String(s || "").trim();
+    const safeTrim = (s) => String(s || "").trim();
 
     const isValidHttpUrl = (value) => {
         const v = safeTrim(value);
@@ -430,9 +432,9 @@
             } else {
                 map.set(url, {
                     ...existing, ...item, url,
-                    saved_at:  existing.saved_at || item.saved_at || Date.now(),
-                    title:     betterTitle(item.title,  existing.title),
-                    poster:    betterPoster(item.poster, existing.poster),
+                    saved_at: existing.saved_at || item.saved_at || Date.now(),
+                    title: betterTitle(item.title, existing.title),
+                    poster: betterPoster(item.poster, existing.poster),
                 });
             }
         }
@@ -458,12 +460,12 @@
                 continue;
             }
             const exTs = existing.saved_at || 0;
-            const itTs = item.saved_at     || 0;
+            const itTs = item.saved_at || 0;
             map.set(url, {
                 ...existing, ...item, url,
                 saved_at: Math.max(exTs, itTs) || Date.now(),
-                title:    betterTitle(item.title,   existing.title),
-                poster:   betterPoster(item.poster, existing.poster),
+                title: betterTitle(item.title, existing.title),
+                poster: betterPoster(item.poster, existing.poster),
             });
         }
         return Array.from(map.values());
@@ -476,7 +478,7 @@
         if (!match) return url;
         if (url.includes('poster_0_3.png') || url.includes('poster_0_3.jpg')) return url;
 
-        const mediaId  = match[1];
+        const mediaId = match[1];
         const testUrls = [
             `https://static.filmin.pt/images/pt/media/${mediaId}/1/poster_0_3.png`,
             `https://static.filmin.pt/images/pt/media/${mediaId}/1/poster_0_3.jpg`,
@@ -504,15 +506,15 @@
 
     // ── SVG icon library ──────────────────────────────────────────────────────
     const ICONS = {
-        cloud:    `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>`,
+        cloud: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>`,
         download: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>`,
-        history:  `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><path d="M3.05 11a9 9 0 1 0 .5-4"/><polyline points="3 3 3 7 7 7"/></svg>`,
-        copy:     `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
-        check:    `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
-        api:      `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>`,
-        export:   `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>`,
-        poster:   `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>`,
-        dash:     `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>`,
+        history: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><path d="M3.05 11a9 9 0 1 0 .5-4"/><polyline points="3 3 3 7 7 7"/></svg>`,
+        copy: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+        check: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+        api: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>`,
+        export: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>`,
+        poster: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>`,
+        dash: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>`,
     };
 
     // ── Toast infrastructure ──────────────────────────────────────────────────
@@ -603,8 +605,8 @@
 
     function downloadFallback(filename, content) {
         const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
         a.href = url; a.download = filename;
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 3000);
@@ -665,19 +667,19 @@
        para lookups O(1) em loops sobre centenas de cards.
        ===================================================================== */
     function buildStoreCache() {
-        const catPaid    = getStored(STORE_CATALOG_PAID);
-        const downPaid   = getStored(STORE_DOWNLOADED_PAID);
-        const downFree   = getStored(STORE_DOWNLOADED_FREE);
+        const catPaid = getStored(STORE_CATALOG_PAID);
+        const downPaid = getStored(STORE_DOWNLOADED_PAID);
+        const downFree = getStored(STORE_DOWNLOADED_FREE);
         const copiedFree = getStored(STORE_DOWNLOAD_COPY_FREE);
-        const catFree    = getStored(STORE_CATALOG_FREE);
+        const catFree = getStored(STORE_CATALOG_FREE);
 
         return {
             catPaid, downPaid, downFree, copiedFree, catFree,
-            setCatPaid:    new Set(catPaid.map(u => u.url)),
-            setDownPaid:   new Set(downPaid.map(u => u.url)),
-            setDownFree:   new Set(downFree.map(u => u.url)),
+            setCatPaid: new Set(catPaid.map(u => u.url)),
+            setDownPaid: new Set(downPaid.map(u => u.url)),
+            setDownFree: new Set(downFree.map(u => u.url)),
             setCopiedFree: new Set(copiedFree.map(u => u.url)),
-            setCatFree:    new Set(catFree.map(u => u.url)),
+            setCatFree: new Set(catFree.map(u => u.url)),
         };
     }
 
@@ -693,8 +695,8 @@
 
     function isRelevantFilminItem(url) {
         return url.includes("/filme/") || url.includes("/serie/") ||
-               url.includes("/curta/") || url.includes("/curtas/") ||
-               url.includes("/filmes/") || url.includes("/series/");
+            url.includes("/curta/") || url.includes("/curtas/") ||
+            url.includes("/filmes/") || url.includes("/series/");
     }
 
     // Set de hrefs já processados — limpo a cada chamada para evitar falsos negativos
@@ -716,12 +718,12 @@
             const root = getCardRootForAnchor(a);
             let title = "", poster = "", yearInfo = "";
             if (root) {
-                const imgEl     = root.querySelector("img");
-                poster          = imgEl ? (imgEl.getAttribute("data-src") || imgEl.getAttribute("data-zoom-src") || imgEl.src || "") : "";
+                const imgEl = root.querySelector("img");
+                poster = imgEl ? (imgEl.getAttribute("data-src") || imgEl.getAttribute("data-zoom-src") || imgEl.src || "") : "";
                 const titleNode = root.querySelector("h3") || imgEl;
-                title           = titleNode ? (titleNode.textContent || titleNode.alt || "").trim() : "";
-                const yearNode  = root.querySelector(".card-options-info-heading span");
-                yearInfo        = yearNode ? yearNode.textContent.trim() : "";
+                title = titleNode ? (titleNode.textContent || titleNode.alt || "").trim() : "";
+                const yearNode = root.querySelector(".card-options-info-heading span");
+                yearInfo = yearNode ? yearNode.textContent.trim() : "";
             }
 
             const item = { url: href, title, poster, year: yearInfo };
@@ -739,10 +741,10 @@
 
     function fsSupported() {
         return typeof window.showSaveFilePicker === "function" ||
-               typeof unsafeWindow.showSaveFilePicker === "function";
+            typeof unsafeWindow.showSaveFilePicker === "function";
     }
 
-    const FS_DB    = "bs_filmin_fs_db_v2";
+    const FS_DB = "bs_filmin_fs_db_v2";
     const FS_STORE = "kv";
 
     function __openDB() {
@@ -753,7 +755,7 @@
                 if (!db.objectStoreNames.contains(FS_STORE)) db.createObjectStore(FS_STORE);
             };
             r.onsuccess = () => resolve(r.result);
-            r.onerror   = () => reject(r.error);
+            r.onerror = () => reject(r.error);
         });
     }
     async function __setKV(k, v) {
@@ -768,7 +770,7 @@
         const db = await __openDB();
         return new Promise((res, rej) => {
             const tx = db.transaction(FS_STORE, "readonly");
-            const r  = tx.objectStore(FS_STORE).get(k);
+            const r = tx.objectStore(FS_STORE).get(k);
             r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
         });
     }
@@ -844,10 +846,10 @@
 
         // Converte posters para HD, com concorrência limitada a 6 pedidos simultâneos
         let processedImages = 0;
-        const totalImages   = visualPaid.length + visualFree.length;
+        const totalImages = visualPaid.length + visualFree.length;
         if (totalImages > 0) progressToast('save_history_imgs', 'A converter Posters HD...', 0, totalImages);
 
-        const allItems    = [...visualPaid, ...visualFree];
+        const allItems = [...visualPaid, ...visualFree];
         const CONCURRENCY = 6;
         for (let i = 0; i < allItems.length; i += CONCURRENCY) {
             await Promise.all(allItems.slice(i, i + CONCURRENCY).map(async (item) => {
@@ -874,11 +876,11 @@
             }
         }
 
-        const currentLocalPaid    = getStored(STORE_CATALOG_PAID);
+        const currentLocalPaid = getStored(STORE_CATALOG_PAID);
         const currentLocalCatFree = getStored(STORE_CATALOG_FREE);
 
-        const mergedPaid    = mergeData([...(existingJsonData.catalog_paid  || []), ...currentLocalPaid,    ...visualPaid]);
-        const mergedCatFree = mergeData([...(existingJsonData.catalog_free  || []), ...currentLocalCatFree, ...visualFree]);
+        const mergedPaid = mergeData([...(existingJsonData.catalog_paid || []), ...currentLocalPaid, ...visualPaid]);
+        const mergedCatFree = mergeData([...(existingJsonData.catalog_free || []), ...currentLocalCatFree, ...visualFree]);
 
         setStored(STORE_CATALOG_PAID, mergedPaid);
         setStored(STORE_CATALOG_FREE, mergedCatFree);
@@ -911,11 +913,11 @@
 
     async function copyFreeLinksToClipboard() {
         const { free } = collectLinksFromPage();
-        const storedCopied      = getStored(STORE_DOWNLOAD_COPY_FREE);
-        const storedCopiedSet   = new Set(storedCopied.map(u => u.url));
+        const storedCopied = getStored(STORE_DOWNLOAD_COPY_FREE);
+        const storedCopiedSet = new Set(storedCopied.map(u => u.url));
         const storedDownFreeSet = new Set(getStored(STORE_DOWNLOADED_FREE).map(u => u.url));
-        const configs           = getApiConfigs();
-        const excludedApiNames  = new Set(configs.filter(c => c.excludeFromCopy).map(c => c.name));
+        const configs = getApiConfigs();
+        const excludedApiNames = new Set(configs.filter(c => c.excludeFromCopy).map(c => c.name));
 
         let skippedByExclusion = 0;
         const newOnes = free.filter(u => {
@@ -976,14 +978,14 @@
         const payload = {
             downloaded_free: getStored(STORE_DOWNLOADED_FREE),
             downloaded_paid: getStored(STORE_DOWNLOADED_PAID),
-            catalog_paid:    getStored(STORE_CATALOG_PAID),
-            catalog_free:    getStored(STORE_CATALOG_FREE),
-            copied_free:     getStored(STORE_DOWNLOAD_COPY_FREE),
+            catalog_paid: getStored(STORE_CATALOG_PAID),
+            catalog_free: getStored(STORE_CATALOG_FREE),
+            copied_free: getStored(STORE_DOWNLOAD_COPY_FREE),
         };
         const dateStr = new Date().toISOString().split('T')[0];
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
         a.href = url; a.download = `filmin_backup_${dateStr}.json`; a.click();
         URL.revokeObjectURL(url);
         toast("Backup exportado com sucesso.");
@@ -1028,25 +1030,25 @@
                         return arr.map(item => typeof item === 'string' ? { url: item, title: "", poster: "" } : item);
                     };
 
-                    const inPaid        = normalizeData(data.catalog_paid);
-                    const inFree        = normalizeData(data.downloaded_free);
+                    const inPaid = normalizeData(data.catalog_paid);
+                    const inFree = normalizeData(data.downloaded_free);
                     const inCatalogFree = normalizeData(data.catalog_free);
-                    const inCopied      = normalizeData(data.copied_free);
-                    const inDownPaid    = normalizeData(data.downloaded_paid);
+                    const inCopied = normalizeData(data.copied_free);
+                    const inDownPaid = normalizeData(data.downloaded_paid);
 
                     const totalSegments = 5;
                     let seg = 0;
 
-                    if (inPaid.length)        { progressToast('json_import', 'A mesclar Histórico Pago...',    ++seg, totalSegments); setStored(STORE_CATALOG_PAID,       mergeData([...getStored(STORE_CATALOG_PAID),       ...inPaid]));       }
-                    if (inFree.length)        { progressToast('json_import', 'A mesclar Downloads Grátis...', ++seg, totalSegments); setStored(STORE_DOWNLOADED_FREE,    mergeData([...getStored(STORE_DOWNLOADED_FREE),    ...inFree]));       }
-                    if (inCatalogFree.length) { progressToast('json_import', 'A mesclar Histórico Grátis...',  ++seg, totalSegments); setStored(STORE_CATALOG_FREE,       mergeData([...getStored(STORE_CATALOG_FREE),       ...inCatalogFree]));}
-                    if (inCopied.length)      { progressToast('json_import', 'A mesclar Temporários...',       ++seg, totalSegments); setStored(STORE_DOWNLOAD_COPY_FREE, mergeData([...getStored(STORE_DOWNLOAD_COPY_FREE), ...inCopied]));     }
-                    if (inDownPaid.length)    { progressToast('json_import', 'A mesclar Downloads Pagos...',   ++seg, totalSegments); setStored(STORE_DOWNLOADED_PAID,    mergeData([...getStored(STORE_DOWNLOADED_PAID),    ...inDownPaid]));   }
+                    if (inPaid.length) { progressToast('json_import', 'A mesclar Histórico Pago...', ++seg, totalSegments); setStored(STORE_CATALOG_PAID, mergeData([...getStored(STORE_CATALOG_PAID), ...inPaid])); }
+                    if (inFree.length) { progressToast('json_import', 'A mesclar Downloads Grátis...', ++seg, totalSegments); setStored(STORE_DOWNLOADED_FREE, mergeData([...getStored(STORE_DOWNLOADED_FREE), ...inFree])); }
+                    if (inCatalogFree.length) { progressToast('json_import', 'A mesclar Histórico Grátis...', ++seg, totalSegments); setStored(STORE_CATALOG_FREE, mergeData([...getStored(STORE_CATALOG_FREE), ...inCatalogFree])); }
+                    if (inCopied.length) { progressToast('json_import', 'A mesclar Temporários...', ++seg, totalSegments); setStored(STORE_DOWNLOAD_COPY_FREE, mergeData([...getStored(STORE_DOWNLOAD_COPY_FREE), ...inCopied])); }
+                    if (inDownPaid.length) { progressToast('json_import', 'A mesclar Downloads Pagos...', ++seg, totalSegments); setStored(STORE_DOWNLOADED_PAID, mergeData([...getStored(STORE_DOWNLOADED_PAID), ...inDownPaid])); }
 
                     progressToast('json_import', 'JSON Processado!', totalSegments, totalSegments);
 
                     const importedAll = mergeData([...inPaid, ...inFree, ...inCatalogFree, ...inCopied, ...inDownPaid]);
-                    const dirtyRe     = /\s*(-\s*Filmin|ver online\s+(em|en)\s+Filmin)[\s\S]*/i;
+                    const dirtyRe = /\s*(-\s*Filmin|ver online\s+(em|en)\s+Filmin)[\s\S]*/i;
                     const incompleteItems = importedAll.filter(item => !item.title || !item.poster || dirtyRe.test(item.title));
 
                     if (importedAll.some(i => i.title && i.poster)) saveToCloud();
@@ -1087,7 +1089,7 @@
         if (totalItems > 0) progressToast('metadata_scrape', 'A extrair dados...', 0, totalItems);
 
         const dashDirtyHookRe = /\s*(-\s*Filmin|ver online\s+(em|en)\s+Filmin)[\s\S]*/i;
-        const sleep  = ms => new Promise(r => setTimeout(r, ms));
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
         let baseDelay = 1200;
         const ALL_KEYS = [STORE_CATALOG_PAID, STORE_DOWNLOADED_FREE, STORE_DOWNLOAD_COPY_FREE, STORE_CATALOG_FREE, STORE_DOWNLOADED_PAID];
 
@@ -1121,25 +1123,25 @@
                 await sleep(baseDelay);
                 const res = await fetch(item.url);
                 if (res.ok) {
-                    const doc    = new DOMParser().parseFromString(await res.text(), "text/html");
+                    const doc = new DOMParser().parseFromString(await res.text(), "text/html");
                     const dirtyRe = /\s*(-\s*Filmin|ver online\s+(em|en)\s+Filmin)[\s\S]*/i;
 
-                    const h1  = doc.querySelector("h1.display-1") || doc.querySelector("h1, h2.title");
+                    const h1 = doc.querySelector("h1.display-1") || doc.querySelector("h1, h2.title");
                     let title = h1 ? h1.textContent.trim().replace(dirtyRe, '') : "";
                     if (!title) title = (doc.querySelector("title")?.textContent || "").trim().replace(dirtyRe, '');
                     title = title.replace(/\s+/g, ' ').trim();
 
                     const timeNode = doc.querySelector(".year-labels__container time");
-                    let yearInfo   = timeNode ? timeNode.textContent.trim() : (doc.querySelector(".year-labels__container")?.textContent.trim().replace(/\s+/g, ' ') || "");
-                    yearInfo       = (yearInfo.match(/\b(19|20)\d{2}\b/) || [""])[0];
+                    let yearInfo = timeNode ? timeNode.textContent.trim() : (doc.querySelector(".year-labels__container")?.textContent.trim().replace(/\s+/g, ' ') || "");
+                    yearInfo = (yearInfo.match(/\b(19|20)\d{2}\b/) || [""])[0];
 
                     const metaImage = doc.querySelector('meta[property="og:image"]');
-                    let poster      = metaImage?.getAttribute('content') || doc.querySelector("img[data-src]")?.getAttribute('data-src') || "";
+                    let poster = metaImage?.getAttribute('content') || doc.querySelector("img[data-src]")?.getAttribute('data-src') || "";
 
                     if (!title && !poster) { title = "Página Inválida"; poster = "https://placehold.co/280x400?text=Invalido"; }
 
-                    item.title  = title || "Sem Título";
-                    item.year   = yearInfo || item.year || "";
+                    item.title = title || "Sem Título";
+                    item.year = yearInfo || item.year || "";
                     item.poster = (poster && !poster.includes('placehold.co'))
                         ? await getTestedHighResPoster(poster)
                         : (poster || "https://placehold.co/280x400?text=Sem+Capa");
@@ -1158,7 +1160,7 @@
 
                     item.title = "Página Inativa / Erro (Rever)";
                     item.poster = "https://placehold.co/280x400?text=Inativo";
-                    item.year   = "";
+                    item.year = "";
                     let touchedErr = false;
                     ALL_KEYS.forEach(KEY => {
                         const list = getStored(KEY), idx = list.findIndex(u => u.url === item.url);
@@ -1194,9 +1196,9 @@
              refreshAllCards() descarta o WeakSet e reencaminha tudo.
        ===================================================================== */
 
-    const _seenCards    = new WeakSet();  // cards já processados nesta sessão
+    const _seenCards = new WeakSet();  // cards já processados nesta sessão
     const _pendingCards = new Set();      // cards aguardando o próximo RAF
-    let   _rafId        = 0;
+    let _rafId = 0;
 
     /** Adiciona um card à fila de processamento (se ainda não visto) */
     function queueCard(el) {
@@ -1213,9 +1215,9 @@
         _rafId = 0;
         if (_pendingCards.size === 0) return;
 
-        const cache            = buildStoreCache();
-        const cloudMap         = _buildCloudMap();
-        const configs          = getApiConfigs();
+        const cache = buildStoreCache();
+        const cloudMap = _buildCloudMap();
+        const configs = getApiConfigs();
         const excludedFromHide = new Set(configs.filter(c => c.excludeFromHide).map(c => c.name));
         const readableApiNames = new Set(configs.map(c => c.name)); // todas as clouds, com ou sem key
 
@@ -1283,33 +1285,33 @@
         const href = normUrl(mainAnchor.href || toAbsUrl(mainAnchor.getAttribute("href") || ""));
         if (!href || !isRelevantFilminItem(href)) return false;
 
-        const isPaid    = isTVODPage() || !!root.querySelector(PREMIER_ICON_SELECTOR);
+        const isPaid = isTVODPage() || !!root.querySelector(PREMIER_ICON_SELECTOR);
         const STORE_KEY = isPaid ? STORE_DOWNLOADED_PAID : STORE_DOWNLOADED_FREE;
 
         // Estado local
-        const isSavedFree    = cache.setDownFree.has(href);
-        const isSavedPaid    = cache.setDownPaid.has(href);
-        const isCopiedFree   = cache.setCopiedFree.has(href);
+        const isSavedFree = cache.setDownFree.has(href);
+        const isSavedPaid = cache.setDownPaid.has(href);
+        const isCopiedFree = cache.setCopiedFree.has(href);
         const isCatalogLocal = cache.setCatFree.has(href) || cache.setCatPaid.has(href);
 
         // Estado cloud
-        const cloudItems         = cloudMap.get(href) || [];
-        const dlCloudItems       = cloudItems.filter(i => i.listType === STORE_DOWNLOADED_FREE || i.listType === STORE_DOWNLOADED_PAID);
-        const catalogCloudItems  = cloudItems.filter(i => (i.listType === STORE_CATALOG_FREE || i.listType === STORE_CATALOG_PAID) && readableApiNames.has(i.apiName));
+        const cloudItems = cloudMap.get(href) || [];
+        const dlCloudItems = cloudItems.filter(i => i.listType === STORE_DOWNLOADED_FREE || i.listType === STORE_DOWNLOADED_PAID);
+        const catalogCloudItems = cloudItems.filter(i => (i.listType === STORE_CATALOG_FREE || i.listType === STORE_CATALOG_PAID) && readableApiNames.has(i.apiName));
 
-        const isSavedInCloud   = dlCloudItems.length > 0;
-        const visuallyCatalog  = catalogCloudItems.length > 0 || isCatalogLocal;
-        const cloudNames       = [...new Set(dlCloudItems.map(i => i.apiName))];
+        const isSavedInCloud = dlCloudItems.length > 0;
+        const visuallyCatalog = catalogCloudItems.length > 0 || isCatalogLocal;
+        const cloudNames = [...new Set(dlCloudItems.map(i => i.apiName))];
         const isOnlyInExcludedClouds = cloudNames.length > 0 && cloudNames.every(n => excludedFromHide.has(n));
 
-        const isSavedLocally     = isSavedFree || isSavedPaid || isCopiedFree;
-        const visuallySaved      = isSavedLocally || isSavedInCloud;
+        const isSavedLocally = isSavedFree || isSavedPaid || isCopiedFree;
+        const visuallySaved = isSavedLocally || isSavedInCloud;
         const isSavedPermanently = isSavedFree || isSavedPaid;
-        const meetsHideCriteria  = isSavedPermanently || (isSavedInCloud && !isOnlyInExcludedClouds);
+        const meetsHideCriteria = isSavedPermanently || (isSavedInCloud && !isOnlyInExcludedClouds);
 
         const containerToHide = root.parentElement?.parentElement || root;
 
-        root.style.boxShadow  = "";
+        root.style.boxShadow = "";
         root.style.transition = "all 0.2s ease";
 
         // Ocultar card segundo as flags activas
@@ -1344,7 +1346,7 @@
                     const match = dlCloudItems.find(i => i.apiName === n);
                     colorfulNames += `<span style="color:${match.apiColor}">${n}</span>` + (idx < cloudNames.length - 1 ? ", " : "");
                 });
-                pill.innerHTML = `${ICONS.cloud} <span style='display:inline-flex;align-items:center;gap:3px;'>${colorfulNames}</span>`; pill.style.display='flex'; pill.style.alignItems='center'; pill.style.gap='4px';
+                pill.innerHTML = `${ICONS.cloud} <span style='display:inline-flex;align-items:center;gap:3px;'>${colorfulNames}</span>`; pill.style.display = 'flex'; pill.style.alignItems = 'center'; pill.style.gap = '4px';
                 badge.appendChild(pill);
             }
             root.style.position = "relative";
@@ -1355,9 +1357,9 @@
         if (visuallySaved) {
             const poster = root.querySelector('.card-image') || root.querySelector('figure') || root;
             poster.style.opacity = "0.35";
-            if (isCopiedFree && !isSavedFree && !isSavedPaid)        root.style.boxShadow = "0 0 0 3px #ffc107";
+            if (isCopiedFree && !isSavedFree && !isSavedPaid) root.style.boxShadow = "0 0 0 3px #ffc107";
             else if (isSavedInCloud && !isSavedFree && !isSavedPaid) root.style.boxShadow = `0 0 0 3px ${getApiColor(cloudNames[0], configs)}`;
-            else                                                       root.style.boxShadow = "0 0 0 3px #10b981";
+            else root.style.boxShadow = "0 0 0 3px #10b981";
             root.style.borderRadius = "6px";
         } else {
             const poster = root.querySelector('.card-image') || root.querySelector('figure') || root;
@@ -1370,18 +1372,18 @@
         if (controls) {
             controls.querySelectorAll('.filmin-btn-downloaded').forEach(b => b.remove());
 
-            const imgEl     = root.querySelector("img");
-            const poster    = imgEl ? (imgEl.getAttribute("data-src") || imgEl.src) : "";
+            const imgEl = root.querySelector("img");
+            const poster = imgEl ? (imgEl.getAttribute("data-src") || imgEl.src) : "";
             const titleNode = root.querySelector("h3") || imgEl;
-            const title     = titleNode ? (titleNode.textContent || titleNode.alt || "Sem Título") : "Sem Título";
-            const yearNode  = root.querySelector(".card-options-info-heading span");
-            const yearInfo  = yearNode ? yearNode.textContent.trim() : "";
+            const title = titleNode ? (titleNode.textContent || titleNode.alt || "Sem Título") : "Sem Título";
+            const yearNode = root.querySelector(".card-options-info-heading span");
+            const yearInfo = yearNode ? yearNode.textContent.trim() : "";
 
             let color = 'currentColor';
             let label = `Guardar Local (${isPaid ? 'Pago' : 'Grátis'})`;
             if (isCopiedFree && !isSavedFree && !isSavedPaid) { color = '#ffc107'; label = `Marcar como Guardado (Copiado)`; }
-            else if (isSavedFree)    { color = '#10b981'; label = `Remover da lista (Transferidos Grátis)`; }
-            else if (isSavedPaid)    { color = '#3b82f6'; label = `Remover da lista (Transferidos Pagos)`; }
+            else if (isSavedFree) { color = '#10b981'; label = `Remover da lista (Transferidos Grátis)`; }
+            else if (isSavedPaid) { color = '#3b82f6'; label = `Remover da lista (Transferidos Pagos)`; }
             else if (isSavedInCloud) { color = '#8b5cf6'; label = `Guardar Local (Já está na nuvem)`; }
 
             const opacity = visuallySaved ? '1' : '0.6';
@@ -1404,13 +1406,13 @@
                 newBtn.onclick = async (ev) => {
                     ev.preventDefault(); ev.stopPropagation();
                     toast("A verificar Capa em Alta Definição...");
-                    const finalPoster   = await getTestedHighResPoster(poster);
-                    let currentList     = getStored(STORE_KEY);
-                    let copiedList      = getStored(STORE_DOWNLOAD_COPY_FREE);
-                    const isCurrentlySaved  = currentList.some(u => u.url === href);
+                    const finalPoster = await getTestedHighResPoster(poster);
+                    let currentList = getStored(STORE_KEY);
+                    let copiedList = getStored(STORE_DOWNLOAD_COPY_FREE);
+                    const isCurrentlySaved = currentList.some(u => u.url === href);
                     const isCurrentlyCopied = copiedList.some(u => u.url === href);
                     const mediaLabel = href.includes("/serie/") ? "Série" : href.includes("/curta/") ? "Curta" : "Filme";
-                    const art        = mediaLabel === "Filme" ? "o" : "a";
+                    const art = mediaLabel === "Filme" ? "o" : "a";
 
                     if (isCurrentlySaved) {
                         currentList = currentList.filter(u => u.url !== href);
@@ -1438,8 +1440,8 @@
         } else if (visuallySaved) {
             // Sem controls visíveis — aplica só borda colorida
             if (isCopiedFree && !isSavedFree && !isSavedPaid) { root.style.boxShadow = "0 0 0 3px #ffc107"; root.style.borderRadius = "6px"; }
-            else if (isSavedFree)  { root.style.boxShadow = "0 0 0 3px #10b981"; root.style.borderRadius = "6px"; }
-            else if (isSavedPaid)  { root.style.boxShadow = "0 0 0 3px #3b82f6"; root.style.borderRadius = "6px"; }
+            else if (isSavedFree) { root.style.boxShadow = "0 0 0 3px #10b981"; root.style.borderRadius = "6px"; }
+            else if (isSavedPaid) { root.style.boxShadow = "0 0 0 3px #3b82f6"; root.style.borderRadius = "6px"; }
         }
 
         return false;
@@ -1452,9 +1454,9 @@
      */
     function highlightSavedLinks() {
         _currentHiddenCount = 0;
-        const cache            = buildStoreCache();
-        const cloudMap         = _buildCloudMap();
-        const configs          = getApiConfigs();
+        const cache = buildStoreCache();
+        const cloudMap = _buildCloudMap();
+        const configs = getApiConfigs();
         const excludedFromHide = new Set(configs.filter(c => c.excludeFromHide).map(c => c.name));
         const readableApiNames = new Set(configs.map(c => c.name)); // todas as clouds, com ou sem key
 
@@ -1496,7 +1498,7 @@
     }
     function saveUIPos(pos) { GM_setValue(UI_POS_KEY, JSON.stringify(pos)); }
     function setMinimized(v) { GM_setValue(UI_MIN_KEY, !!v); }
-    function fmtStats(s)   { return `Itens: ${s.all}  |  Pagos: ${s.paid}  |  Grátis: ${s.free}`; }
+    function fmtStats(s) { return `Itens: ${s.all}  |  Pagos: ${s.paid}  |  Grátis: ${s.free}`; }
     function currentStats() { const { all, paid, free } = collectLinksFromPage(); return { all: all.length, paid: paid.length, free: free.length }; }
 
     /**
@@ -1506,19 +1508,19 @@
      */
     // SVG icons para stats — nítidos em qualquer DPI
     const STAT_ICONS = {
-        page:     `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`,
-        catalog:  `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M5 3a2 2 0 0 0-2 2v16l9-4 9 4V5a2 2 0 0 0-2-2H5z"/></svg>`,
+        page: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`,
+        catalog: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M5 3a2 2 0 0 0-2 2v16l9-4 9 4V5a2 2 0 0 0-2-2H5z"/></svg>`,
         download: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
-        copy:     `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+        copy: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
     };
 
     function updateStats() {
         if (!statsEl) return;
         const s = currentStats();
-        const pg   = s.all;
+        const pg = s.all;
         const catF = getStored(STORE_CATALOG_FREE).length;
         const catP = getStored(STORE_CATALOG_PAID).length;
-        const cpy  = getStored(STORE_DOWNLOAD_COPY_FREE).length;
+        const cpy = getStored(STORE_DOWNLOAD_COPY_FREE).length;
         const cell = (icon, color, val, label) =>
             `<div style="padding:7px 9px;background:rgba(8,12,20,.98);">
                 <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
@@ -1529,10 +1531,10 @@
             </div>`;
         statsEl.innerHTML =
             `<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,.05);border-radius:9px;overflow:hidden;">
-                ${cell(STAT_ICONS.page,    '#94a3b8', pg,   'Na página')}
+                ${cell(STAT_ICONS.page, '#94a3b8', pg, 'Na página')}
                 ${cell(STAT_ICONS.catalog, '#00e0a4', catF, 'Ficheiro Grátis')}
-                ${cell(STAT_ICONS.download,'#a78bfa', catP, 'Ficheiro Pagos')}
-                ${cell(STAT_ICONS.copy,    cpy > 0 ? '#f59e0b' : '#64748b', cpy, 'Copiados')}
+                ${cell(STAT_ICONS.download, '#a78bfa', catP, 'Ficheiro Pagos')}
+                ${cell(STAT_ICONS.copy, cpy > 0 ? '#f59e0b' : '#64748b', cpy, 'Copiados')}
             </div>`;
 
         const btnMarkCopied = document.getElementById("btn-mark-copied-filmin");
@@ -1549,7 +1551,7 @@
             b.textContent = label;
         }
         const accent = opts.accent || "rgba(0,224,164,.55)";
-        const danger  = opts.danger || false;
+        const danger = opts.danger || false;
         b.style.cssText = `padding:10px 12px;border-radius:10px;
             background:rgba(255,255,255,.05);
             color:${danger ? "#f87171" : "#e2e8f0"};
@@ -1611,7 +1613,7 @@
             color:#94a3b8;border-radius:7px;width:26px;height:26px;cursor:pointer;
             transition:background .15s,color .15s;`;
         minBtn.addEventListener("mouseover", () => { minBtn.style.background = "rgba(255,255,255,.1)"; minBtn.style.color = "#fff"; });
-        minBtn.addEventListener("mouseout",  () => { minBtn.style.background = "rgba(255,255,255,.05)"; minBtn.style.color = "#94a3b8"; });
+        minBtn.addEventListener("mouseout", () => { minBtn.style.background = "rgba(255,255,255,.05)"; minBtn.style.color = "#94a3b8"; });
         header.append(title, minBtn);
 
         // Body
@@ -1628,11 +1630,11 @@
         btnCopyFree.style.flex = "1";
 
         const rowCopied = document.createElement("div"); rowCopied.style.cssText = "display:flex;gap:7px;";
-        const btnMarkCopied  = makeButton("Marcar transferidos", markCopiedAsDownloaded);
+        const btnMarkCopied = makeButton("Marcar transferidos", markCopiedAsDownloaded);
         const btnResetCopied = makeButton("Limpar copiados", resetCopiedLinks, { danger: true });
-        btnMarkCopied.id  = "btn-mark-copied-filmin";
+        btnMarkCopied.id = "btn-mark-copied-filmin";
         btnResetCopied.id = "btn-reset-copied-filmin";
-        btnMarkCopied.style.flex  = "1"; btnResetCopied.style.flex = "1";
+        btnMarkCopied.style.flex = "1"; btnResetCopied.style.flex = "1";
         rowCopied.append(btnMarkCopied, btnResetCopied);
 
         const btnManageAPIs = makeButton("Gerir APIs cloud", openApiManagerUI, { accent: "rgba(139,92,246,.7)" });
@@ -1655,9 +1657,9 @@
 
         const applyMin = (v) => {
             body.style.display = v ? "none" : "flex";
-            minBtn.innerHTML   = v ? svgMax : svgMin;
+            minBtn.innerHTML = v ? svgMax : svgMin;
             setMinimized(v);
-            panel.style.width  = v ? "180px" : "320px";
+            panel.style.width = v ? "180px" : "320px";
         };
         minBtn.addEventListener("click", (e) => { e.stopPropagation(); applyMin(body.style.display !== "none"); });
 
@@ -1668,7 +1670,7 @@
             const cy = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
             dragging = true; startX = cx; startY = cy;
             startRight = parseInt(panel.style.right, 10) || 14;
-            startTop   = parseInt(panel.style.top,   10);
+            startTop = parseInt(panel.style.top, 10);
             if (isNaN(startTop)) { startTop = panel.offsetTop; panel.style.bottom = 'auto'; }
             if (!e.type.includes('touch')) e.preventDefault();
         };
@@ -1677,20 +1679,20 @@
             if (e.type.includes('touch')) e.preventDefault();
             const cx = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
             const cy = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-            let nr = Math.max(0, Math.min(startRight + (startX - cx), window.innerWidth  - panel.offsetWidth));
-            let nt = Math.max(0, Math.min(startTop  + (cy - startY), window.innerHeight - panel.offsetHeight));
+            let nr = Math.max(0, Math.min(startRight + (startX - cx), window.innerWidth - panel.offsetWidth));
+            let nt = Math.max(0, Math.min(startTop + (cy - startY), window.innerHeight - panel.offsetHeight));
             panel.style.right = `${nr}px`; panel.style.top = `${nt}px`;
         };
         const endDrag = () => {
             if (!dragging) return; dragging = false;
             saveUIPos({ right: parseInt(panel.style.right, 10) || 14, top: parseInt(panel.style.top, 10) });
         };
-        header.addEventListener("mousedown",  startDrag);
+        header.addEventListener("mousedown", startDrag);
         header.addEventListener("touchstart", startDrag, { passive: false });
-        window.addEventListener("mousemove",  moveDrag);
-        window.addEventListener("touchmove",  moveDrag, { passive: false });
-        window.addEventListener("mouseup",    endDrag);
-        window.addEventListener("touchend",   endDrag);
+        window.addEventListener("mousemove", moveDrag);
+        window.addEventListener("touchmove", moveDrag, { passive: false });
+        window.addEventListener("mouseup", endDrag);
+        window.addEventListener("touchend", endDrag);
 
         updateStats();
     }
@@ -1703,10 +1705,10 @@
     // Usa TextEncoder/TextDecoder para ser Unicode-safe — nomes com acentos
     // ou emojis já não corrompem o valor armazenado (btoa() falha com chars > Latin1).
     function __obf(str) {
-        const key    = "FLM_SEC_KEY_24";
-        const bytes  = new TextEncoder().encode(str);
+        const key = "FLM_SEC_KEY_24";
+        const bytes = new TextEncoder().encode(str);
         const kbytes = new TextEncoder().encode(key);
-        const out    = new Uint8Array(bytes.length);
+        const out = new Uint8Array(bytes.length);
         for (let i = 0; i < bytes.length; i++) out[i] = bytes[i] ^ kbytes[i % kbytes.length];
         let bin = "";
         out.forEach(b => bin += String.fromCharCode(b));
@@ -1714,11 +1716,11 @@
     }
     function __deobf(b64) {
         try {
-            const key    = "FLM_SEC_KEY_24";
-            const bin    = atob(b64);
-            const bytes  = Uint8Array.from(bin, c => c.charCodeAt(0));
+            const key = "FLM_SEC_KEY_24";
+            const bin = atob(b64);
+            const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
             const kbytes = new TextEncoder().encode(key);
-            const out    = new Uint8Array(bytes.length);
+            const out = new Uint8Array(bytes.length);
             for (let i = 0; i < bytes.length; i++) out[i] = bytes[i] ^ kbytes[i % kbytes.length];
             return new TextDecoder().decode(out);
         } catch { return b64; }
@@ -1747,8 +1749,8 @@
         const configs = getApiConfigs();
 
         // Buffers locais — só promovidos a globais se não houver fetch mais recente
-        const nextCloudSaves       = {};
-        const nextCloudFullData    = [];
+        const nextCloudSaves = {};
+        const nextCloudFullData = [];
         const nextCloudExtraFields = [];
 
         // Fetch em paralelo — com 2+ clouds o tempo total passa de T1+T2 para max(T1,T2)
@@ -1771,8 +1773,8 @@
                 if (data && typeof data === "object" && !Array.isArray(data)) {
                     processArray(data[STORE_DOWNLOADED_FREE], STORE_DOWNLOADED_FREE);
                     processArray(data[STORE_DOWNLOADED_PAID], STORE_DOWNLOADED_PAID);
-                    processArray(data[STORE_CATALOG_PAID],    STORE_CATALOG_PAID);
-                    processArray(data[STORE_CATALOG_FREE],    STORE_CATALOG_FREE);
+                    processArray(data[STORE_CATALOG_PAID], STORE_CATALOG_PAID);
+                    processArray(data[STORE_CATALOG_FREE], STORE_CATALOG_FREE);
                     if (Array.isArray(data[STORE_EXTRA_FIELD])) nextCloudExtraFields.push(...data[STORE_EXTRA_FIELD]);
                 } else if (Array.isArray(data)) { processArray(data, STORE_DOWNLOADED_FREE); }
             } catch (err) { console.error(`Falha no GET para ${api.name}:`, err); }
@@ -1781,8 +1783,8 @@
         // Descarta resultado se entretanto já começou um fetch mais recente
         if (seq !== _cloudFetchSeq) return;
 
-        cloudSaves       = nextCloudSaves;
-        cloudFullData    = nextCloudFullData.sort((a, b) => (b.saved_at || 0) - (a.saved_at || 0));
+        cloudSaves = nextCloudSaves;
+        cloudFullData = nextCloudFullData.sort((a, b) => (b.saved_at || 0) - (a.saved_at || 0));
         cloudExtraFields = nextCloudExtraFields;
 
         // Full sweep após chegada de dados cloud — necessário para actualizar badges
@@ -1804,9 +1806,9 @@
                 const payload = {
                     [STORE_DOWNLOADED_FREE]: mergeData([...(cloudData[STORE_DOWNLOADED_FREE] || []), ...getStored(STORE_DOWNLOADED_FREE)]),
                     [STORE_DOWNLOADED_PAID]: mergeData([...(cloudData[STORE_DOWNLOADED_PAID] || []), ...getStored(STORE_DOWNLOADED_PAID)]),
-                    [STORE_CATALOG_PAID]:    mergeData([...(cloudData[STORE_CATALOG_PAID]    || []), ...getStored(STORE_CATALOG_PAID)]),
-                    [STORE_CATALOG_FREE]:    mergeData([...(cloudData[STORE_CATALOG_FREE]    || []), ...getStored(STORE_CATALOG_FREE)]),
-                    [STORE_EXTRA_FIELD]:     mergeDataPreferNewest([...(cloudData[STORE_EXTRA_FIELD] || []), ...getStored(STORE_EXTRA_FIELD)]),
+                    [STORE_CATALOG_PAID]: mergeData([...(cloudData[STORE_CATALOG_PAID] || []), ...getStored(STORE_CATALOG_PAID)]),
+                    [STORE_CATALOG_FREE]: mergeData([...(cloudData[STORE_CATALOG_FREE] || []), ...getStored(STORE_CATALOG_FREE)]),
+                    [STORE_EXTRA_FIELD]: mergeDataPreferNewest([...(cloudData[STORE_EXTRA_FIELD] || []), ...getStored(STORE_EXTRA_FIELD)]),
                 };
 
                 const res = await fetch(api.url, {
@@ -1874,8 +1876,8 @@
         const checkCSS = `accent-color:#00e0a4;width:14px;height:14px;cursor:pointer;`;
 
         const renderList = () => {
-            const configs     = getApiConfigs();
-            const isEditing   = editingIdx !== -1;
+            const configs = getApiConfigs();
+            const isEditing = editingIdx !== -1;
             const editingName = isEditing ? esc(configs[editingIdx]?.name ?? "") : "";
 
             let listHtml = "";
@@ -1885,30 +1887,30 @@
                 </div>`;
             } else {
                 configs.forEach((api, idx) => {
-                    const hasFree     = cloudFullData.some(i => i.apiName === api.name && i.listType === STORE_DOWNLOADED_FREE);
+                    const hasFree = cloudFullData.some(i => i.apiName === api.name && i.listType === STORE_DOWNLOADED_FREE);
                     const hasDownPaid = cloudFullData.some(i => i.apiName === api.name && i.listType === STORE_DOWNLOADED_PAID);
-                    const hasPaid     = cloudFullData.some(i => i.apiName === api.name && i.listType === STORE_CATALOG_PAID);
-                    const hasCatalog  = cloudFullData.some(i => i.apiName === api.name && i.listType === STORE_CATALOG_FREE);
-                    const safeName    = esc(api.name);
-                    const safeColor   = esc(getApiColor(api.name, configs));
-                    const actionBtn   = (cls, label, bg, textColor = '#fff') =>
+                    const hasPaid = cloudFullData.some(i => i.apiName === api.name && i.listType === STORE_CATALOG_PAID);
+                    const hasCatalog = cloudFullData.some(i => i.apiName === api.name && i.listType === STORE_CATALOG_FREE);
+                    const safeName = esc(api.name);
+                    const safeColor = esc(getApiColor(api.name, configs));
+                    const actionBtn = (cls, label, bg, textColor = '#fff') =>
                         `<button data-idx="${idx}" class="${cls}" style="padding:4px 10px;background:${bg};color:${textColor};border:none;border-radius:6px;font-size:11px;cursor:pointer;font-weight:500;">${label}</button>`;
                     listHtml += `
                     <div style="background:rgba(255,255,255,.03);padding:12px 14px;border-radius:10px;margin-bottom:8px;border:1px solid rgba(255,255,255,.06);">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${api.apiKey ? '10px' : '0'};">
                             <span style="font-size:13px;font-weight:600;color:${safeColor};letter-spacing:.02em;">${safeName}</span>
                             <div style="display:flex;gap:6px;">
-                                ${actionBtn("edit-api-btn","Editar","rgba(100,116,139,.3)")}
-                                ${actionBtn("del-api-btn","Remover","rgba(220,38,38,.2)","#fca5a5")}
+                                ${actionBtn("edit-api-btn", "Editar", "rgba(100,116,139,.3)")}
+                                ${actionBtn("del-api-btn", "Remover", "rgba(220,38,38,.2)", "#fca5a5")}
                             </div>
                         </div>
                         ${api.apiKey ? `<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;padding-top:8px;border-top:1px solid rgba(255,255,255,.05);">
                             <span style="font-size:10px;color:#475569;margin-right:2px;letter-spacing:.06em;text-transform:uppercase;">Gestão:</span>
-                            ${actionBtn("restore-api-btn","⬇ Restaurar local","rgba(37,99,235,.25)","#93c5fd")}
-                            ${hasFree     ? actionBtn("purge-free-btn","✕ Transf. Grátis","rgba(194,65,12,.25)","#fca5a5") : ''}
-                            ${hasDownPaid ? actionBtn("purge-downpaid-btn","✕ Transf. Pagos","rgba(217,119,6,.2)","#fcd34d") : ''}
-                            ${hasPaid     ? actionBtn("purge-paid-btn","✕ Hist. Pagos","rgba(147,51,234,.2)","#d8b4fe") : ''}
-                            ${hasCatalog  ? actionBtn("purge-catalog-btn","✕ Hist. Grátis","rgba(14,165,233,.2)","#7dd3fc") : ''}
+                            ${actionBtn("restore-api-btn", "⬇ Restaurar local", "rgba(37,99,235,.25)", "#93c5fd")}
+                            ${hasFree ? actionBtn("purge-free-btn", "✕ Transf. Grátis", "rgba(194,65,12,.25)", "#fca5a5") : ''}
+                            ${hasDownPaid ? actionBtn("purge-downpaid-btn", "✕ Transf. Pagos", "rgba(217,119,6,.2)", "#fcd34d") : ''}
+                            ${hasPaid ? actionBtn("purge-paid-btn", "✕ Hist. Pagos", "rgba(147,51,234,.2)", "#d8b4fe") : ''}
+                            ${hasCatalog ? actionBtn("purge-catalog-btn", "✕ Hist. Grátis", "rgba(14,165,233,.2)", "#7dd3fc") : ''}
                         </div>` : ''}
                         <div style="display:flex;gap:12px;margin-top:7px;font-size:10.5px;">
                             <span style="color:${api.apiKey ? '#10b981' : '#475569'};">${api.apiKey ? '● Write access' : '○ Apenas leitura'}</span>
@@ -1947,7 +1949,10 @@
                     <input id="new-api-name" placeholder="Nome (ex: Eu, João)" style="${inputCSS}margin-bottom:8px;">
                     <input id="new-api-url"  placeholder="URL (ex: https://api.exemplo.workers.dev)" style="${inputCSS}margin-bottom:8px;">
                     <div style="display:flex;gap:6px;margin-bottom:12px;align-items:stretch;">
-                        <input type="password" id="new-api-key" placeholder="API Key Secreta (opcional — write access)" style="${inputCSS}margin-bottom:0;flex:1;">
+                        <div style="position:relative;flex:1;display:flex;">
+                            <input type="password" id="new-api-key" placeholder="API Key Secreta (opcional — write access)" style="${inputCSS}margin-bottom:0;flex:1;padding-right:36px;">
+                            <button type="button" id="filmin-api-eye-key" title="Mostrar/Esconder Password" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:#94a3b8;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;padding:4px;">👓</button>
+                        </div>
                         <button type="button" id="filmin-api-gen-key" title="Gerar chave aleatória segura"
                             style="padding:0 12px;background:rgba(0,224,164,.15);color:#6ee7b7;border:1px solid rgba(0,224,164,.3);border-radius:8px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;font-family:inherit;">✦ Gerar</button>
                     </div>
@@ -1964,13 +1969,22 @@
                 </div>
             </div>`;
 
+            // Eye toggle for API password
+            const eyeBtn = box.querySelector("#filmin-api-eye-key");
+            if (eyeBtn) {
+                eyeBtn.onclick = () => {
+                    const inp = box.querySelector("#new-api-key");
+                    inp.type = inp.type === "password" ? "text" : "password";
+                };
+            }
+
             // Generate random secure API key
             const genBtn = box.querySelector("#filmin-api-gen-key");
             if (genBtn) {
                 genBtn.onclick = () => {
                     const arr = new Uint8Array(24);
                     crypto.getRandomValues(arr);
-                    const key = Array.from(arr).map(b => b.toString(16).padStart(2,'0')).join('');
+                    const key = Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
                     const inp = box.querySelector("#new-api-key");
                     inp.value = key; inp.type = "text";
                     setTimeout(() => { inp.type = "password"; }, 3000);
@@ -1980,18 +1994,18 @@
 
             // Focus styles on inputs
             box.querySelectorAll("input[id^='new-api']").forEach(inp => {
-                inp.addEventListener("focus",  () => inp.style.borderColor = "rgba(0,224,164,.5)");
-                inp.addEventListener("blur",   () => inp.style.borderColor = "rgba(255,255,255,.09)");
+                inp.addEventListener("focus", () => inp.style.borderColor = "rgba(0,224,164,.5)");
+                inp.addEventListener("blur", () => inp.style.borderColor = "rgba(255,255,255,.09)");
             });
 
             if (isEditing) {
                 const api = configs[editingIdx];
-                box.querySelector("#new-api-name").value           = api.name;
-                box.querySelector("#new-api-url").value            = api.url;
-                box.querySelector("#new-api-key").value            = api.apiKey || "";
-                box.querySelector("#new-api-exclude").checked      = !!api.excludeFromCopy;
+                box.querySelector("#new-api-name").value = api.name;
+                box.querySelector("#new-api-url").value = api.url;
+                box.querySelector("#new-api-key").value = api.apiKey || "";
+                box.querySelector("#new-api-exclude").checked = !!api.excludeFromCopy;
                 box.querySelector("#new-api-exclude-hide").checked = !!api.excludeFromHide;
-                box.querySelector("#cancel-edit-btn").onclick      = () => { editingIdx = -1; renderList(); };
+                box.querySelector("#cancel-edit-btn").onclick = () => { editingIdx = -1; renderList(); };
             }
 
             box.querySelectorAll(".del-api-btn").forEach(btn => {
@@ -2023,10 +2037,10 @@
                     };
                 });
             };
-            setupPurge(".purge-free-btn",     "TRANSF. GRATUITAS",   { purgeKey: STORE_DOWNLOADED_FREE });
-            setupPurge(".purge-downpaid-btn", "TRANSF. PAGAS",        { purgeKey: STORE_DOWNLOADED_PAID });
-            setupPurge(".purge-paid-btn",     "HISTÓRICO PAGAS",      { purgeKey: STORE_CATALOG_PAID });
-            setupPurge(".purge-catalog-btn",  "HISTÓRICO GRATUITAS",  { purgeKey: STORE_CATALOG_FREE });
+            setupPurge(".purge-free-btn", "TRANSF. GRATUITAS", { purgeKey: STORE_DOWNLOADED_FREE });
+            setupPurge(".purge-downpaid-btn", "TRANSF. PAGAS", { purgeKey: STORE_DOWNLOADED_PAID });
+            setupPurge(".purge-paid-btn", "HISTÓRICO PAGAS", { purgeKey: STORE_CATALOG_PAID });
+            setupPurge(".purge-catalog-btn", "HISTÓRICO GRATUITAS", { purgeKey: STORE_CATALOG_FREE });
 
             box.querySelectorAll(".restore-api-btn").forEach(btn => {
                 btn.onclick = async () => {
@@ -2040,21 +2054,21 @@
                     if (data && typeof data === 'object' && !Array.isArray(data)) {
                         setStored(STORE_DOWNLOADED_FREE, data[STORE_DOWNLOADED_FREE] || []);
                         setStored(STORE_DOWNLOADED_PAID, data[STORE_DOWNLOADED_PAID] || []);
-                        setStored(STORE_CATALOG_PAID,    data[STORE_CATALOG_PAID]    || []);
-                        setStored(STORE_CATALOG_FREE,    data[STORE_CATALOG_FREE]    || []);
+                        setStored(STORE_CATALOG_PAID, data[STORE_CATALOG_PAID] || []);
+                        setStored(STORE_CATALOG_FREE, data[STORE_CATALOG_FREE] || []);
                         toast(`Restauro concluído via ${api.name}.`);
                         updateStats(); highlightSavedLinks(); mod.remove();
                     } else { alert("Formato de dados inválido."); }
                 };
             });
 
-            box.querySelector("#close-api-btn").onclick  = () => mod.remove();
-            box.querySelector("#save-api-btn").onclick   = () => {
-                const n   = box.querySelector("#new-api-name").value.trim();
-                let u     = box.querySelector("#new-api-url").value.trim();
-                const k   = box.querySelector("#new-api-key").value.trim();
+            box.querySelector("#close-api-btn").onclick = () => mod.remove();
+            box.querySelector("#save-api-btn").onclick = () => {
+                const n = box.querySelector("#new-api-name").value.trim();
+                let u = box.querySelector("#new-api-url").value.trim();
+                const k = box.querySelector("#new-api-key").value.trim();
                 const exc = box.querySelector("#new-api-exclude").checked;
-                const excH= box.querySelector("#new-api-exclude-hide").checked;
+                const excH = box.querySelector("#new-api-exclude-hide").checked;
                 if (!n || !u) return alert("O Nome e o URL são obrigatórios.");
                 if (!u.startsWith("http")) return alert("URL deve começar por http:// ou https://");
                 if (k) {
@@ -2091,8 +2105,8 @@
             if (!unsafeWindow.Vue) {
                 await new Promise((resolve, reject) => {
                     const s = document.createElement('script');
-                    s.src     = 'https://unpkg.com/vue@3/dist/vue.global.js';
-                    s.onload  = resolve;
+                    s.src = 'https://unpkg.com/vue@3/dist/vue.global.js';
+                    s.onload = resolve;
                     s.onerror = () => reject(new Error('Failed to load Vue.js'));
                     document.head.appendChild(s);
                 });
@@ -2103,11 +2117,11 @@
         }
         const VueLib = unsafeWindow.Vue;
 
-        const localFreeCount     = getStored(STORE_DOWNLOADED_FREE).length;
+        const localFreeCount = getStored(STORE_DOWNLOADED_FREE).length;
         const localDownPaidCount = getStored(STORE_DOWNLOADED_PAID).length;
-        const localPaidCount     = getStored(STORE_CATALOG_PAID).length;
-        const localCopiedCount   = getStored(STORE_DOWNLOAD_COPY_FREE).length;
-        const localCatFreeCount  = getStored(STORE_CATALOG_FREE).length;
+        const localPaidCount = getStored(STORE_CATALOG_PAID).length;
+        const localCopiedCount = getStored(STORE_DOWNLOAD_COPY_FREE).length;
+        const localCatFreeCount = getStored(STORE_CATALOG_FREE).length;
 
         const notesMap = new Map();
         // mergeDataPreferNewest garante que uma nota editada recentemente
@@ -2125,22 +2139,22 @@
                     isLocalDownloaded: false, isLocalHistory: false, isLocal: false, isPaid: false, isCopied: false
                 });
             }
-            const r          = allItemsMap.get(item.url);
+            const r = allItemsMap.get(item.url);
             const activeType = item.listType || explicitType;
             if (activeType === STORE_CATALOG_PAID || activeType === STORE_DOWNLOADED_PAID) r.isPaid = true;
-            const isDl   = activeType === STORE_DOWNLOADED_FREE || activeType === STORE_DOWNLOADED_PAID;
+            const isDl = activeType === STORE_DOWNLOADED_FREE || activeType === STORE_DOWNLOADED_PAID;
             const isCopy = activeType === STORE_DOWNLOAD_COPY_FREE;
             const isHist = activeType === STORE_CATALOG_FREE || activeType === STORE_CATALOG_PAID;
             if (isCloud) {
                 if (!r.sources.some(s => s.name === sourceName)) r.sources.push({ name: sourceName, color: sourceColor });
-                if (isDl)   r.cloudDownloaded[sourceName] = true;
-                if (isHist) r.cloudHistory[sourceName]    = true;
+                if (isDl) r.cloudDownloaded[sourceName] = true;
+                if (isHist) r.cloudHistory[sourceName] = true;
                 if (item.saved_at && (!r.saved_at || item.saved_at > r.saved_at)) r.saved_at = item.saved_at;
             } else {
                 r.isLocal = true;
-                if (isDl)   r.isLocalDownloaded = true;
-                if (isHist) r.isLocalHistory    = true;
-                if (isCopy) r.isCopied          = true;
+                if (isDl) r.isLocalDownloaded = true;
+                if (isHist) r.isLocalHistory = true;
+                if (isCopy) r.isCopied = true;
                 if (!r.saved_at && item.saved_at) r.saved_at = item.saved_at;
             }
             if (!r.mediaType) {
@@ -2150,28 +2164,28 @@
         };
 
         cloudFullData.forEach(item => addOrUpdate(item, item.apiName, item.apiColor, true));
-        getStored(STORE_DOWNLOADED_FREE).forEach(item    => addOrUpdate(item, "Local", null, false, STORE_DOWNLOADED_FREE));
-        getStored(STORE_DOWNLOADED_PAID).forEach(item    => addOrUpdate(item, "Local", null, false, STORE_DOWNLOADED_PAID));
-        getStored(STORE_CATALOG_PAID).forEach(item       => addOrUpdate(item, "Local", null, false, STORE_CATALOG_PAID));
+        getStored(STORE_DOWNLOADED_FREE).forEach(item => addOrUpdate(item, "Local", null, false, STORE_DOWNLOADED_FREE));
+        getStored(STORE_DOWNLOADED_PAID).forEach(item => addOrUpdate(item, "Local", null, false, STORE_DOWNLOADED_PAID));
+        getStored(STORE_CATALOG_PAID).forEach(item => addOrUpdate(item, "Local", null, false, STORE_CATALOG_PAID));
         getStored(STORE_DOWNLOAD_COPY_FREE).forEach(item => addOrUpdate(item, "Local", null, false, STORE_DOWNLOAD_COPY_FREE));
-        getStored(STORE_CATALOG_FREE).forEach(item       => addOrUpdate(item, "Local", null, false, STORE_CATALOG_FREE));
+        getStored(STORE_CATALOG_FREE).forEach(item => addOrUpdate(item, "Local", null, false, STORE_CATALOG_FREE));
 
         const allDashboardData = Array.from(allItemsMap.values()).sort((a, b) => (b.saved_at || 0) - (a.saved_at || 0));
-        const dashDirtyRe      = /\s*(-\s*Filmin|ver online\s+(em|en)\s+Filmin)[\s\S]*/i;
-        const completeItems    = allDashboardData.filter(i => i.title && i.poster && !dashDirtyRe.test(i.title));
+        const dashDirtyRe = /\s*(-\s*Filmin|ver online\s+(em|en)\s+Filmin)[\s\S]*/i;
+        const completeItems = allDashboardData.filter(i => i.title && i.poster && !dashDirtyRe.test(i.title));
         const pendingItemsData = allDashboardData.filter(i => !i.title || !i.poster || dashDirtyRe.test(i.title));
 
         if (pendingItemsData.length > 0) setTimeout(() => scrapeMissingMetadataInBackground(pendingItemsData), 800);
 
-        const configs          = getApiConfigs();
-        const uniqueCloudsArr  = [...new Set(configs.map(c => c.name))];
-        const cloudStatsData   = uniqueCloudsArr.map(cn => ({
+        const configs = getApiConfigs();
+        const uniqueCloudsArr = [...new Set(configs.map(c => c.name))];
+        const cloudStatsData = uniqueCloudsArr.map(cn => ({
             name: cn, color: getApiColor(cn, configs),
-            hasKey:   !!configs.find(c => c.name === cn)?.apiKey,
+            hasKey: !!configs.find(c => c.name === cn)?.apiKey,
             downFree: cloudFullData.filter(i => i.apiName === cn && i.listType === STORE_DOWNLOADED_FREE).length,
             downPaid: cloudFullData.filter(i => i.apiName === cn && i.listType === STORE_DOWNLOADED_PAID).length,
-            catFree:  cloudFullData.filter(i => i.apiName === cn && i.listType === STORE_CATALOG_FREE).length,
-            catPaid:  cloudFullData.filter(i => i.apiName === cn && i.listType === STORE_CATALOG_PAID).length,
+            catFree: cloudFullData.filter(i => i.apiName === cn && i.listType === STORE_CATALOG_FREE).length,
+            catPaid: cloudFullData.filter(i => i.apiName === cn && i.listType === STORE_CATALOG_PAID).length,
         }));
 
         const mod = document.createElement("div");
@@ -2208,7 +2222,7 @@
 
         const { createApp, ref, computed } = VueLib;
         const dashboardData = ref(completeItems);
-        const pendingItems  = ref(pendingItemsData);
+        const pendingItems = ref(pendingItemsData);
 
         const app = createApp({
             template: `
@@ -2234,7 +2248,7 @@
   <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;width:100%;margin-bottom:14px;">
     <div v-for="(v,l) in statCards" :key="l"
          style="background:rgba(255,255,255,.03);padding:14px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:10px;">
-      <div :style="{background:v.color+'1a',borderColor:v.color+'44'}" style="width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;border:1px solid;flex-shrink:0;">{{ v.icon }}</div>
+      <div :style="{background:v.color+'1a',borderColor:v.color+'44'}" style="width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;border:1px solid;flex-shrink:0;" v-html="v.icon"></div>
       <div>
         <div :style="{color:v.color}" style="font-size:22px;font-weight:700;line-height:1;">{{ v.count }}</div>
         <div style="font-size:10px;color:#94a3b8;margin-top:2px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;">{{ l }}</div>
@@ -2308,8 +2322,8 @@
         </a>
         <div style="position:absolute;top:8px;left:8px;display:flex;flex-wrap:wrap;width:86%;pointer-events:none;">
           <span v-for="src in item.sources" :key="src.name" :style="{color:src.color,borderStyle:item.cloudDownloaded[src.name]?'solid':'dashed'}"
-                style="background:rgba(0,0,0,.88);padding:2px 6px;border-radius:4px;font-size:9.5px;margin-right:4px;margin-bottom:4px;border-width:1px;border-color:rgba(255,255,255,.15);font-weight:600;letter-spacing:.04em;">
-            {{ badgeIcons(item,src.name) }} {{ src.name }}
+                style="display:flex;align-items:center;gap:3px;background:rgba(0,0,0,.88);padding:2px 6px;border-radius:4px;font-size:9.5px;margin-right:4px;margin-bottom:4px;border-width:1px;border-color:rgba(255,255,255,.15);font-weight:600;letter-spacing:.04em;">
+            <span v-html="badgeIcons(item,src.name)" style="display:flex;align-items:center;"></span> {{ src.name }}
           </span>
           <span v-if="item.isLocal" style="background:rgba(0,0,0,.88);color:#10b981;padding:2px 6px;border-radius:4px;font-size:9.5px;margin-right:4px;margin-bottom:4px;border:1px solid rgba(16,185,129,.3);font-weight:600;">Local</span>
         </div>
@@ -2377,20 +2391,20 @@
   </div>
 </div>`,
             setup() {
-                const BATCH       = 50;
-                const sentinel    = ref(null);
-                const searchName  = ref("");
-                const filterPaid  = ref("all");
-                const filterType  = ref("all");
+                const BATCH = 50;
+                const sentinel = ref(null);
+                const searchName = ref("");
+                const filterPaid = ref("all");
+                const filterType = ref("all");
                 const filterCloud = ref("all");
                 const filterStatus = ref("all");
-                const dateStart   = ref("");
-                const dateEnd     = ref("");
-                const viewMode    = ref(safeLSGet(STORE_DASH_VIEW_MODE, 'card') || 'card');
-                const imageCache  = ref({});
+                const dateStart = ref("");
+                const dateEnd = ref("");
+                const viewMode = ref(safeLSGet(STORE_DASH_VIEW_MODE, 'card') || 'card');
+                const imageCache = ref({});
                 const scrapeCurrent = ref(0);
-                const scrapeTotal   = ref(0);
-                const editingItem     = ref(null);
+                const scrapeTotal = ref(0);
+                const editingItem = ref(null);
                 const editingNoteItem = ref(null);
                 const hoverNote = ref(null);
 
@@ -2400,38 +2414,38 @@
                 };
 
                 const statCards = {
-                    'Transf. Grátis':  { count: localFreeCount,     color: '#10b981', icon: '✓' },
-                    'Transf. Pagos':   { count: localDownPaidCount,  color: '#f59e0b', icon: '★' },
-                    'Copiados Temp':   { count: localCopiedCount,    color: '#fbbf24', icon: '⋯' },
-                    'Hist. Grátis':    { count: localCatFreeCount,   color: '#0ea5e9', icon: '🔖' },
-                    'Hist. Pagos':     { count: localPaidCount,      color: '#9333ea', icon: '♦' },
+                    'Transf. Grátis': { count: localFreeCount, color: '#10b981', icon: '✓' },
+                    'Transf. Pagos': { count: localDownPaidCount, color: '#f59e0b', icon: '★' },
+                    'Copiados Temp': { count: localCopiedCount, color: '#fbbf24', icon: '⋯' },
+                    'Hist. Grátis': { count: localCatFreeCount, color: '#0ea5e9', icon: '🔖' },
+                    'Hist. Pagos': { count: localPaidCount, color: '#9333ea', icon: '♦' },
                 };
 
                 const ar = computed(() => viewMode.value === 'poster' ? '2/3' : '16/9');
 
                 const filtered = computed(() => {
-                    const q  = searchName.value.toLowerCase();
+                    const q = searchName.value.toLowerCase();
                     const ds = dateStart.value ? new Date(dateStart.value).getTime() : 0;
-                    const de = dateEnd.value   ? new Date(dateEnd.value).getTime() + 86400000 : Infinity;
+                    const de = dateEnd.value ? new Date(dateEnd.value).getTime() + 86400000 : Infinity;
                     return dashboardData.value.filter(item => {
                         if (q && !(item.title || '').toLowerCase().includes(q)) return false;
                         if (filterPaid.value === "paid" && !item.isPaid) return false;
-                        if (filterPaid.value === "free" && item.isPaid)  return false;
+                        if (filterPaid.value === "free" && item.isPaid) return false;
                         if (filterType.value !== "all" && item.mediaType !== filterType.value) return false;
                         const cloud = filterCloud.value, status = filterStatus.value;
                         if (cloud === "local") {
                             if (!item.isLocal) return false;
                             if (status === "downloaded" && !item.isLocalDownloaded) return false;
-                            if (status === "history"    && !item.isLocalHistory)    return false;
-                            if (status === "copied"     && !item.isCopied)          return false;
+                            if (status === "history" && !item.isLocalHistory) return false;
+                            if (status === "copied" && !item.isCopied) return false;
                         } else if (cloud !== "all") {
                             if (!item.sources.some(s => s.name === cloud)) return false;
                             if (status === "downloaded" && !item.cloudDownloaded[cloud]) return false;
-                            if (status === "history"    && !item.cloudHistory[cloud])    return false;
+                            if (status === "history" && !item.cloudHistory[cloud]) return false;
                         } else {
                             if (status === "downloaded" && !item.isLocalDownloaded && !Object.keys(item.cloudDownloaded).length) return false;
-                            if (status === "history"    && !item.isLocalHistory    && !Object.keys(item.cloudHistory).length)    return false;
-                            if (status === "copied"     && !item.isCopied) return false;
+                            if (status === "history" && !item.isLocalHistory && !Object.keys(item.cloudHistory).length) return false;
+                            if (status === "copied" && !item.isCopied) return false;
                         }
                         const t = item.saved_at || 0;
                         return !(t < ds || (t > 0 && t > de));
@@ -2439,8 +2453,8 @@
                 });
 
                 const displayCount = ref(BATCH);
-                const displayed    = computed(() => filtered.value.slice(0, displayCount.value));
-                const loadMore     = () => { if (displayCount.value < filtered.value.length) displayCount.value += BATCH; };
+                const displayed = computed(() => filtered.value.slice(0, displayCount.value));
+                const loadMore = () => { if (displayCount.value < filtered.value.length) displayCount.value += BATCH; };
 
                 VueLib.watch([searchName, filterPaid, filterStatus, filterType, filterCloud, dateStart, dateEnd], () => { displayCount.value = BATCH; });
                 VueLib.onMounted(() => {
@@ -2451,18 +2465,23 @@
                     obs.observe(sentinel.value);
                 });
 
-                const toggleView    = () => { viewMode.value = viewMode.value === 'card' ? 'poster' : 'card'; safeLSSet(STORE_DASH_VIEW_MODE, viewMode.value); };
-                const close         = () => { delete window._filminDashUpdateItem; delete window._filminDashScrapeProgress; revokeAllObjectURLs(); mod.remove(); };
-                const isSaved       = (item) => item.isLocalDownloaded || Object.keys(item.cloudDownloaded).length > 0;
-                const badgeIcons    = (item, srcName) => { let i = ''; if (item.cloudDownloaded[srcName]) i += ICONS.download; if (item.cloudHistory[srcName]) i += ICONS.history; return i || ICONS.cloud; };
-                const cardStyle     = (item) => {
+                const toggleView = () => { viewMode.value = viewMode.value === 'card' ? 'poster' : 'card'; safeLSSet(STORE_DASH_VIEW_MODE, viewMode.value); };
+                const close = () => { delete window._filminDashUpdateItem; delete window._filminDashScrapeProgress; revokeAllObjectURLs(); mod.remove(); };
+                const isSaved = (item) => item.isLocalDownloaded || Object.keys(item.cloudDownloaded).length > 0;
+                const badgeIcons = (item, srcName) => {
+                    let icons = '☁️';
+                    if (item.cloudDownloaded[srcName]) icons += ' ⏬';
+                    else if (item.cloudHistory[srcName]) icons += ' 🔖';
+                    return icons;
+                };
+                const cardStyle = (item) => {
                     let bs = 'none';
-                    if (item.isLocalDownloaded)                        bs = '0 0 0 3px #10b981';
+                    if (item.isLocalDownloaded) bs = '0 0 0 3px #10b981';
                     else if (Object.keys(item.cloudDownloaded).length) bs = `0 0 0 3px ${getApiColor(Object.keys(item.cloudDownloaded)[0], configs)}`;
                     return { boxShadow: bs, background: '#111', border: '1px solid #2a2a2a', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', transition: 'transform 0.2s' };
                 };
-                const cardHover     = (ev, enter) => { ev.currentTarget.style.transform = enter ? 'scale(1.02)' : 'scale(1)'; ev.currentTarget.style.borderColor = enter ? '#555' : '#2a2a2a'; };
-                const typeColor     = (mt) => mt === "Série" ? "#3b82f6" : mt === "Curta" ? "#eab308" : mt === "Filme" ? "#ec4899" : "#8b5cf6";
+                const cardHover = (ev, enter) => { ev.currentTarget.style.transform = enter ? 'scale(1.02)' : 'scale(1)'; ev.currentTarget.style.borderColor = enter ? '#555' : '#2a2a2a'; };
+                const typeColor = (mt) => mt === "Série" ? "#3b82f6" : mt === "Curta" ? "#eab308" : mt === "Filme" ? "#ec4899" : "#8b5cf6";
 
                 const posterSrc = (item) => {
                     const rawUrl = item.poster || 'https://placehold.co/280x400?text=Sem+Capa';
@@ -2483,12 +2502,12 @@
                 };
 
                 const posterErr = (ev, item) => {
-                    const img  = ev.target;
+                    const img = ev.target;
                     const safe = item.poster || '';
                     if (viewMode.value === 'poster') {
                         const m = safe.match(/\/media\/(\d+)\//);
                         if (m) {
-                            const mid   = m[1];
+                            const mid = m[1];
                             const chain = [
                                 `https://static.filmin.pt/images/pt/media/${mid}/1/poster_0_3.jpg`,
                                 `https://static.filmin.pt/images/pt/media/${mid}/1/poster_0_3.png`,
@@ -2503,12 +2522,12 @@
                     img.onerror = null; img.src = safe || 'https://placehold.co/280x400?text=Erro';
                 };
 
-                const fmtDate    = (ts) => !ts ? 'Desconhecida' : new Date(ts).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const fmtDate = (ts) => !ts ? 'Desconhecida' : new Date(ts).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
                 const copyPoster = (item) => { GM_setClipboard(item.poster || "", { type: "text/plain" }); toast('Link do poster copiado!'); };
                 const hasWriteAccess = (item) => item.isLocal || item.sources.some(src => configs.find(c => c.name === src.name)?.apiKey);
 
                 const openEditModal = (item) => { editingItem.value = { ...item }; };
-                const saveEdit      = () => {
+                const saveEdit = () => {
                     if (!editingItem.value) return;
                     const it = { ...editingItem.value, updated_at: Date.now() };
                     const ALL_KEYS = [STORE_CATALOG_PAID, STORE_DOWNLOADED_FREE, STORE_DOWNLOAD_COPY_FREE, STORE_CATALOG_FREE, STORE_DOWNLOADED_PAID];
@@ -2516,14 +2535,14 @@
                         const list = getStored(KEY), idx = list.findIndex(u => u.url === it.url);
                         if (idx !== -1) { list[idx] = { ...list[idx], title: it.title, poster: it.poster, year: it.year, updated_at: it.updated_at }; setStored(KEY, list); }
                     });
-                    const copy  = [...dashboardData.value], dIdx = copy.findIndex(i => i.url === it.url);
+                    const copy = [...dashboardData.value], dIdx = copy.findIndex(i => i.url === it.url);
                     if (dIdx !== -1) copy[dIdx] = { ...copy[dIdx], ...it };
                     dashboardData.value = copy;
                     saveToCloud(); toast('Item atualizado!'); editingItem.value = null;
                 };
 
                 const openNoteModal = (item) => { editingNoteItem.value = { url: item.url, filmin_extra_field: item.filmin_extra_field || '' }; };
-                const saveNoteEdit  = () => {
+                const saveNoteEdit = () => {
                     if (!editingNoteItem.value) return;
                     const it = editingNoteItem.value, savedAt = Date.now();
                     let list = getStored(STORE_EXTRA_FIELD);
@@ -2542,7 +2561,7 @@
                     const ALL_KEYS = [STORE_CATALOG_PAID, STORE_DOWNLOADED_FREE, STORE_DOWNLOAD_COPY_FREE, STORE_CATALOG_FREE, STORE_DOWNLOADED_PAID];
                     ALL_KEYS.forEach(KEY => { const f = getStored(KEY).filter(u => u.url !== item.url); setStored(KEY, f); });
                     dashboardData.value = dashboardData.value.filter(i => i.url !== item.url);
-                    pendingItems.value  = pendingItems.value.filter(i => i.url !== item.url);
+                    pendingItems.value = pendingItems.value.filter(i => i.url !== item.url);
                     await removeFromCloud(item.url);
                 };
 
@@ -2550,8 +2569,8 @@
                     const data = filtered.value;
                     if (!data.length) return toast('Nada para exportar.');
                     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-                    const url  = URL.createObjectURL(blob);
-                    const a    = document.createElement("a"); a.href = url; a.download = `filmin_export_${data.length}_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href = url; a.download = `filmin_export_${data.length}_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
                 };
 
                 return {
@@ -2569,7 +2588,7 @@
         window._filminDashScrapeProgress = (current, total) => {
             const st = app._instance?.setupState;
             if (st?.scrapeCurrent?.value !== undefined) st.scrapeCurrent.value = current;
-            if (st?.scrapeTotal?.value   !== undefined) st.scrapeTotal.value   = total;
+            if (st?.scrapeTotal?.value !== undefined) st.scrapeTotal.value = total;
         };
 
         window._filminDashUpdateItem = (url, title, poster, year) => {
@@ -2605,7 +2624,7 @@
     function openWorkerTutorialUI() {
         document.getElementById("filmin-cloud-tutorial")?.remove();
 
-        const GITHUB_URL      = "https://github.com/Blackspirits/media-sync/blob/main/worker/worker.js";
+        const GITHUB_URL = "https://github.com/Blackspirits/media-sync/blob/main/worker/worker.js";
         const GITHUB_REPO_URL = "https://github.com/Blackspirits/media-sync";
 
         const mod = document.createElement("div");
@@ -2630,7 +2649,7 @@
         ];
         const stepsHtml = steps.map((s, i) =>
             `<li style="display:flex;align-items:flex-start;margin-bottom:11px;font-size:12.5px;color:#cbd5e1;line-height:1.5;">
-                <span style="${stepNumStyle}">${i+1}</span>
+                <span style="${stepNumStyle}">${i + 1}</span>
                 <span><b style="color:#f1f5f9;">${s[0]}</b>: ${s[1]}</span>
             </li>`
         ).join('');
@@ -2664,13 +2683,13 @@
             </div>
 
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-                ${btnLink("tut-gh-link", GITHUB_URL,      "↗ Ver Worker no GitHub",     "rgba(37,99,235,.2)",    "rgba(37,99,235,.4)")}
-                ${btnLink("tut-gh-repo", GITHUB_REPO_URL, "↗ Repositório completo",    "rgba(55,65,81,.4)",     "rgba(255,255,255,.12)")}
+                ${btnLink("tut-gh-link", GITHUB_URL, "↗ Ver Worker no GitHub", "rgba(37,99,235,.2)", "rgba(37,99,235,.4)")}
+                ${btnLink("tut-gh-repo", GITHUB_REPO_URL, "↗ Repositório completo", "rgba(55,65,81,.4)", "rgba(255,255,255,.12)")}
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 ${btnCopy("tut-copy-secret", "Copiar nome do Secret (API_KEY)", "rgba(139,92,246,.15)", "rgba(139,92,246,.35)", "#c4b5fd")}
-                ${btnCopy("tut-copy-kv",     "Copiar KV binding (MEDIA)",       "rgba(16,185,129,.15)", "rgba(16,185,129,.35)", "#6ee7b7")}
-                ${btnCopy("tut-copy-pfx",    "Copiar prefixo (filmin_)",        "rgba(14,165,233,.15)", "rgba(14,165,233,.35)", "#7dd3fc")}
+                ${btnCopy("tut-copy-kv", "Copiar KV binding (MEDIA)", "rgba(16,185,129,.15)", "rgba(16,185,129,.35)", "#6ee7b7")}
+                ${btnCopy("tut-copy-pfx", "Copiar prefixo (filmin_)", "rgba(14,165,233,.15)", "rgba(14,165,233,.35)", "#7dd3fc")}
             </div>
         </div>`;
 
@@ -2681,8 +2700,8 @@
         box.querySelector("#tut-close").onclick = close;
         mod.addEventListener("click", (e) => { if (e.target === mod) close(); });
         box.querySelector("#tut-copy-secret").onclick = () => { GM_setClipboard("API_KEY", { type: "text/plain" }); toast("Copiado: API_KEY"); };
-        box.querySelector("#tut-copy-kv").onclick     = () => { GM_setClipboard("MEDIA",   { type: "text/plain" }); toast("Copiado: MEDIA"); };
-        box.querySelector("#tut-copy-pfx").onclick    = () => { GM_setClipboard("filmin_", { type: "text/plain" }); toast("Copiado: filmin_"); };
+        box.querySelector("#tut-copy-kv").onclick = () => { GM_setClipboard("MEDIA", { type: "text/plain" }); toast("Copiado: MEDIA"); };
+        box.querySelector("#tut-copy-pfx").onclick = () => { GM_setClipboard("filmin_", { type: "text/plain" }); toast("Copiado: filmin_"); };
     }
 
     function injectHideButton() {
@@ -2694,7 +2713,7 @@
         wrapper.id = "bs-filmin-native-filters";
         wrapper.style.cssText = "display:flex;gap:8px;";
 
-        const svgEye    = `<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle>`;
+        const svgEye = `<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle>`;
         const svgEyeOff = `<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path><line x1="2" y1="2" x2="22" y2="22"></line>`;
 
         // Cria botão toggle com ícone de olho
@@ -2713,9 +2732,9 @@
         };
 
         wrapper.append(
-            createFilterBtn("btn-hide-down",    "Mostrar Transferidos", "Ocultar Transferidos", hideDownloaded, (v) => { hideDownloaded = v; GM_setValue("filmin_hide_downloaded_v1", v); highlightSavedLinks(); }),
-            createFilterBtn("btn-hide-paid",    "Mostrar Pagos",        "Ocultar Pagos",        hidePaid,       (v) => { hidePaid       = v; GM_setValue("filmin_hide_paid_v1",       v); highlightSavedLinks(); }),
-            createFilterBtn("btn-hide-history", "Mostrar Histórico",    "Ocultar Histórico",    hideHistory,    (v) => { hideHistory    = v; GM_setValue("filmin_hide_history_v1",    v); highlightSavedLinks(); })
+            createFilterBtn("btn-hide-down", "Mostrar Transferidos", "Ocultar Transferidos", hideDownloaded, (v) => { hideDownloaded = v; GM_setValue("filmin_hide_downloaded_v1", v); highlightSavedLinks(); }),
+            createFilterBtn("btn-hide-paid", "Mostrar Pagos", "Ocultar Pagos", hidePaid, (v) => { hidePaid = v; GM_setValue("filmin_hide_paid_v1", v); highlightSavedLinks(); }),
+            createFilterBtn("btn-hide-history", "Mostrar Histórico", "Ocultar Histórico", hideHistory, (v) => { hideHistory = v; GM_setValue("filmin_hide_history_v1", v); highlightSavedLinks(); })
         );
 
         filtersContainer.insertBefore(wrapper, filtersContainer.firstChild);
@@ -2725,7 +2744,7 @@
        AUTO SCROLL
        ===================================================================== */
 
-    let autoScrolling   = false;
+    let autoScrolling = false;
     let autoScrollTimer = null;
 
     function stopAutoScroll(btn) {
@@ -2765,14 +2784,14 @@
        ===================================================================== */
 
     GM_registerMenuCommand("Guardar catálogo (Nuvem)", saveHistory);
-    GM_registerMenuCommand("Copiar links (grátis)",                  copyFreeLinksToClipboard);
-    GM_registerMenuCommand("Marcar Transferidos",                    markCopiedAsDownloaded);
-    GM_registerMenuCommand("Reset Copiados",                         resetCopiedLinks);
-    GM_registerMenuCommand("Gerir APIs Cloud",                       openApiManagerUI);
-    GM_registerMenuCommand("Exportar Backup (JSON)",                 exportData);
-    GM_registerMenuCommand("Importar Backup (JSON)",                 importData);
-    GM_registerMenuCommand("Remover ficheiro (Histórico)",           () => { fsApi().clearSlot(FS_SLOT_HISTORY); toast("Ligação ao Ficheiro apagada."); });
-    GM_registerMenuCommand("Scroll automático (ON/OFF)",             () => toggleAutoScroll(null));
+    GM_registerMenuCommand("Copiar links (grátis)", copyFreeLinksToClipboard);
+    GM_registerMenuCommand("Marcar Transferidos", markCopiedAsDownloaded);
+    GM_registerMenuCommand("Reset Copiados", resetCopiedLinks);
+    GM_registerMenuCommand("Gerir APIs Cloud", openApiManagerUI);
+    GM_registerMenuCommand("Exportar Backup (JSON)", exportData);
+    GM_registerMenuCommand("Importar Backup (JSON)", importData);
+    GM_registerMenuCommand("Remover ficheiro (Histórico)", () => { fsApi().clearSlot(FS_SLOT_HISTORY); toast("Ligação ao Ficheiro apagada."); });
+    GM_registerMenuCommand("Scroll automático (ON/OFF)", () => toggleAutoScroll(null));
 
     /* =====================================================================
        INIT / AUTO UPDATES
@@ -2786,9 +2805,9 @@
          6. SPA hooks + scroll   — scheduleUpdate → reinjecta UI se desapareceu
        ===================================================================== */
 
-    let _tAuto    = 0;
+    let _tAuto = 0;
     let _observer = null;
-    let _inited   = false;
+    let _inited = false;
     let _needsFullScan = false; // true após navegação SPA — scan total na próxima scheduleUpdate()
 
     /**
@@ -2843,14 +2862,14 @@
         history.pushState = function (...args) {
             const r = _ps.apply(this, args);
             _needsFullScan = true;
-                setTimeout(scheduleUpdate, 50);
+            setTimeout(scheduleUpdate, 50);
             return r;
         };
         const _rs = history.replaceState;
         history.replaceState = function (...args) {
             const r = _rs.apply(this, args);
             _needsFullScan = true;
-                setTimeout(scheduleUpdate, 50);
+            setTimeout(scheduleUpdate, 50);
             return r;
         };
         window.addEventListener("popstate", () => { _needsFullScan = true; setTimeout(scheduleUpdate, 50); });
