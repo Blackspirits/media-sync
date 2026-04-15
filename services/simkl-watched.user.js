@@ -16,10 +16,10 @@
 // @run-at       document-idle
 // ==/UserScript==
 
-/*  ╔══════════════════════════════════════════════════════════════════════╗
+/*  ╔═══════════════════════════════════════════════════════════════════════════╗
     ║  CONFIGURAÇÃO  — Cria a tua app em https://simkl.com/settings/developer/  ║
-    ║  Preenche SIMKL_CLIENT_ID com o "Client ID" da tua app.             ║
-    ╚══════════════════════════════════════════════════════════════════════╝ */
+    ║  Preenche SIMKL_CLIENT_ID com o "Client ID" da tua app.                   ║
+    ╚═══════════════════════════════════════════════════════════════════════════╝ */
 const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
 
 /* ───────────────────────────── changelog ──────────────────────────────────
@@ -48,32 +48,32 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
     // ════════════════════════════════════════════════════════════════════════
     //  CONSTANTES
     // ════════════════════════════════════════════════════════════════════════
-    const STORE_TOKEN       = "simkl_access_token";
-    const STORE_WATCHED     = "simkl_watched_cache";       // [{title, year, type, ids:{simkl,imdb,tmdb}}]
-    const STORE_CACHE_TS    = "simkl_cache_timestamp";
-    const STORE_OVERRIDES   = "simkl_overrides";           // { "title|year": simkl_id }
-    const STORE_ENABLED     = "simkl_overlay_enabled";
-    const CACHE_TTL_MS      = 6 * 60 * 60 * 1000;         // 6 horas
-    const API               = "https://api.simkl.com";
-    const PANEL_ID          = "simkl-panel";
-    const SITE              = location.hostname.replace("www.", "");
-    const IS_FT             = SITE === "filmtwist.pt";
-    const IS_FM             = SITE === "filmin.pt";
-    const BRAND             = IS_FT ? "#dc2626" : "#00e0a4";
+    const STORE_TOKEN = "simkl_access_token";
+    const STORE_WATCHED = "simkl_watched_cache";       // [{title, year, type, ids:{simkl,imdb,tmdb}}]
+    const STORE_CACHE_TS = "simkl_cache_timestamp";
+    const STORE_OVERRIDES = "simkl_overrides";           // { "title|year": simkl_id }
+    const STORE_ENABLED = "simkl_overlay_enabled";
+    const CACHE_TTL_MS = 6 * 60 * 60 * 1000;         // 6 horas
+    const API = "https://api.simkl.com";
+    const PANEL_ID = "simkl-panel";
+    const SITE = location.hostname.replace("www.", "");
+    const IS_FT = SITE === "filmtwist.pt";
+    const IS_FM = SITE === "filmin.pt";
+    const BRAND = IS_FT ? "#dc2626" : "#00e0a4";
 
     // ════════════════════════════════════════════════════════════════════════
     //  ESTADO RUNTIME
     // ════════════════════════════════════════════════════════════════════════
-    let watchedSet   = new Map();   // normalizedKey → { simkl_id, title, year, type }
-    let overrides    = {};          // "title|year" → simkl_id (manual override)
-    let isEnabled    = true;
-    let syncRunning  = false;
+    let watchedSet = new Map();   // normalizedKey → { simkl_id, title, year, type }
+    let overrides = {};          // "title|year" → simkl_id (manual override)
+    let isEnabled = true;
+    let syncRunning = false;
     let panelVisible = false;
 
     // ════════════════════════════════════════════════════════════════════════
     //  UTILITÁRIOS
     // ════════════════════════════════════════════════════════════════════════
-    function esc(s) { const d = document.createElement("div"); d.textContent = String(s??''); return d.innerHTML; }
+    function esc(s) { const d = document.createElement("div"); d.textContent = String(s ?? ''); return d.innerHTML; }
 
     /** Normaliza título para matching: lowercase, sem artigos, sem pontuação */
     function normalizeTitle(t) {
@@ -97,7 +97,7 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
                 method: opts.method || "GET",
                 url,
                 headers: {
-                    "Content-Type":  "application/json",
+                    "Content-Type": "application/json",
                     "simkl-api-key": SIMKL_CLIENT_ID,
                     ...(opts.headers || {}),
                 },
@@ -168,10 +168,10 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
         for (let i = 0; i < maxAttempts; i++) {
             await new Promise(r => setTimeout(r, intervalSec * 1000));
             const r = await gmFetch(`${API}/oauth/pin/${userCode}?client_id=${SIMKL_CLIENT_ID}`);
-            console.log(`[Simkl] pollPin (${i+1}/${maxAttempts}) → HTTP ${r.status}`, JSON.stringify(r.data));
+            console.log(`[Simkl] pollPin (${i + 1}/${maxAttempts}) → HTTP ${r.status}`, JSON.stringify(r.data));
             // Update modal status if visible
             const statusEl = document.getElementById("simkl-pin-status");
-            if (statusEl) statusEl.textContent = `A verificar... (tentativa ${i+1}/${maxAttempts})`;
+            if (statusEl) statusEl.textContent = `A verificar... (tentativa ${i + 1}/${maxAttempts})`;
 
             if (r.status === 200 && r.data?.access_token) {
                 return r.data.access_token; // ✓ autorizado
@@ -215,7 +215,7 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
             console.error("[Simkl] login error:", e);
             // Show detailed error in toast
             const msg = e.message || String(e);
-            toast(`Erro Simkl: ${msg.length > 80 ? msg.slice(0,80)+"…" : msg}`);
+            toast(`Erro Simkl: ${msg.length > 80 ? msg.slice(0, 80) + "…" : msg}`);
             return false;
         }
     }
@@ -297,7 +297,7 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
             if (r.status !== 200) { toast(`Erro Simkl: HTTP ${r.status}`); return; }
 
             const items = normalizeWatched(r.data);
-            GM_setValue(STORE_WATCHED,  JSON.stringify(items));
+            GM_setValue(STORE_WATCHED, JSON.stringify(items));
             GM_setValue(STORE_CACHE_TS, Date.now());
             buildWatchedSet(items);
             toast(`✓ Simkl: ${items.length} títulos sincronizados`);
@@ -317,14 +317,14 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
             const obj = item.movie || item.show;
             if (!obj) return;
             out.push({
-                title:    obj.title || "",
-                year:     obj.year  || "",
+                title: obj.title || "",
+                year: obj.year || "",
                 type,
-                ids:      obj.ids || {},
+                ids: obj.ids || {},
             });
         };
         (data.movies || []).forEach(i => push(i, "movie"));
-        (data.shows  || []).forEach(i => push(i, "show"));
+        (data.shows || []).forEach(i => push(i, "show"));
         return out;
     }
 
@@ -421,7 +421,7 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
     }
 
     const SVG_CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-    const SVG_EDIT  = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+    const SVG_EDIT = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
 
     /**
      * Extrai dados de um card do DOM conforme o site
@@ -430,11 +430,11 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
     function extractCardData(el) {
         const link = el.querySelector("a[href*='/filme/'], a[href*='/serie/'], a[href*='/curta/']");
         if (!link) return null;
-        const url      = link.href;
-        const title    = (el.querySelector("img")?.alt || el.querySelector("[title]")?.title ||
-                          el.querySelector("h3,h2,.title,.card-title")?.textContent || "").trim();
-        const year     = (el.querySelector(".year,.card-year,.card-options-info-heading span")
-                          ?.textContent || "").match(/\d{4}/)?.[0] || "";
+        const url = link.href;
+        const title = (el.querySelector("img")?.alt || el.querySelector("[title]")?.title ||
+            el.querySelector("h3,h2,.title,.card-title")?.textContent || "").trim();
+        const year = (el.querySelector(".year,.card-year,.card-options-info-heading span")
+            ?.textContent || "").match(/\d{4}/)?.[0] || "";
         // Filmin inline controls row (where ↓ ⏱ ♥ GUARDA live)
         const controls = el.querySelector(".card-options-controls");
         return { title, year, url, root: el, controls };
@@ -463,7 +463,7 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
 
             if (found) {
                 // Visto — ícone check verde
-                ctrlBtn.title = `Simkl: visto (${found.title}${found.year ? " · "+found.year : ""}) — Clica para corrigir`;
+                ctrlBtn.title = `Simkl: visto (${found.title}${found.year ? " · " + found.year : ""}) — Clica para corrigir`;
                 ctrlBtn.innerHTML = `<svg class="o-svg-icon icon--sm c-button__icon" viewBox="0 0 24 24" fill="none"
                     stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -491,7 +491,7 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
 
             // Inserir antes do botão GUARDA (último elemento) ou no fim
             const guardarBtn = data.controls.querySelector('[aria-label*="guarda" i],[aria-label*="save" i],[class*="guarda" i]')
-                            || data.controls.lastElementChild;
+                || data.controls.lastElementChild;
             if (guardarBtn) guardarBtn.insertAdjacentElement("beforebegin", ctrlBtn);
             else data.controls.appendChild(ctrlBtn);
 
@@ -503,7 +503,7 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
             if (found) {
                 const badge = document.createElement("div");
                 badge.className = "simkl-badge";
-                badge.title = `Simkl: visto (${found.title}${found.year ? " · "+found.year : ""})`;
+                badge.title = `Simkl: visto (${found.title}${found.year ? " · " + found.year : ""})`;
                 badge.innerHTML = SVG_CHECK;
                 el.appendChild(badge);
             }
@@ -569,7 +569,7 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
                 <!-- Título detectado -->
                 <div style="font-size:11px;color:#64748b;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Título detectado</div>
                 <div style="font-size:14px;font-weight:600;margin-bottom:4px;">${esc(title)}</div>
-                <div style="font-size:12px;color:#64748b;margin-bottom:16px;">Ano: ${esc(year||'desconhecido')}${currentMatch ? ` · Match atual: <span style="color:#22c55e;">${esc(currentMatch.title)} (${currentMatch.year||'?'})</span>` : ' · <span style="color:#f59e0b;">Sem match</span>'}</div>
+                <div style="font-size:12px;color:#64748b;margin-bottom:16px;">Ano: ${esc(year || 'desconhecido')}${currentMatch ? ` · Match atual: <span style="color:#22c55e;">${esc(currentMatch.title)} (${currentMatch.year || '?'})</span>` : ' · <span style="color:#f59e0b;">Sem match</span>'}</div>
 
                 <!-- ID manual -->
                 <div style="font-size:11px;color:#64748b;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">ID Simkl (override manual)</div>
@@ -644,7 +644,7 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
                 if (r.status === 200 && Array.isArray(r.data) && r.data[0]) {
                     const item = r.data[0].movie || r.data[0].show;
                     resultsEl.innerHTML = `<div style="padding:10px;color:#86efac;">
-                        ✓ Encontrado: <b>${esc(item?.title)}</b> (${item?.year||'?'})
+                        ✓ Encontrado: <b>${esc(item?.title)}</b> (${item?.year || '?'})
                         — ID ${esc(id)}</div>`;
                 } else {
                     resultsEl.innerHTML = `<div style="padding:10px;color:#fca5a5;">ID não encontrado</div>`;
@@ -671,8 +671,8 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
                         row.onmouseenter = () => row.style.background = "rgba(255,255,255,.04)";
                         row.onmouseleave = () => row.style.background = "";
                         const titleEl = document.createElement("div");
-                        titleEl.innerHTML = `<span style="font-size:12.5px;color:#e2e8f0;font-weight:500;">${esc(item?.title||'?')}</span>
-                            <span style="font-size:11px;color:#64748b;margin-left:6px;">${esc(item?.year||'')} · ${esc(type)}</span>`;
+                        titleEl.innerHTML = `<span style="font-size:12.5px;color:#e2e8f0;font-weight:500;">${esc(item?.title || '?')}</span>
+                            <span style="font-size:11px;color:#64748b;margin-left:6px;">${esc(item?.year || '')} · ${esc(type)}</span>`;
                         const selBtn = document.createElement("button");
                         selBtn.textContent = "Selecionar";
                         selBtn.style.cssText = "padding:4px 10px;background:rgba(34,197,94,.15);color:#86efac;border:1px solid rgba(34,197,94,.25);border-radius:6px;cursor:pointer;font-size:11px;white-space:nowrap;font-family:inherit;";
@@ -794,12 +794,12 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
 
     function openSettingsPanel() {
         document.getElementById("simkl-settings-panel")?.remove();
-        const token   = GM_getValue(STORE_TOKEN, null);
+        const token = GM_getValue(STORE_TOKEN, null);
         const cacheTs = GM_getValue(STORE_CACHE_TS, 0);
         const cacheAge = cacheTs ? Math.round((Date.now() - cacheTs) / 60000) : null;
         const rawCache = GM_getValue(STORE_WATCHED, "[]");
         let cachedCount = 0;
-        try { cachedCount = JSON.parse(rawCache).length; } catch {}
+        try { cachedCount = JSON.parse(rawCache).length; } catch { }
 
         const sp = document.createElement("div");
         sp.id = "simkl-settings-panel";
@@ -826,7 +826,7 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
         <div style="padding:10px 14px;font-size:12px;">
             <div style="color:#64748b;margin-bottom:2px;">Estado</div>
             <div style="color:${token ? '#86efac' : '#f87171'};">${token ? '● Autenticado' : '○ Não ligado'}</div>
-            ${cacheAge !== null ? `<div style="color:#475569;font-size:11px;margin-top:2px;">${cachedCount} títulos · cache há ${cacheAge < 60 ? cacheAge + 'm' : Math.round(cacheAge/60) + 'h'}</div>` : ''}
+            ${cacheAge !== null ? `<div style="color:#475569;font-size:11px;margin-top:2px;">${cachedCount} títulos · cache há ${cacheAge < 60 ? cacheAge + 'm' : Math.round(cacheAge / 60) + 'h'}</div>` : ''}
         </div>
 
         <div style="${rowStyle}">

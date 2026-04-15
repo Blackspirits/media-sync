@@ -1,13 +1,13 @@
 // ==UserScript==
-// @name         Panda+ — Gestor de Catálogo, Downloads & Sync Cloud
+// @name         TVCine — Gestor de Catálogo, Downloads & Sync Cloud
 // @namespace    leinad4mind.top/forum
 // @version      1.9.0
-// @description  Conta e guarda filmes/séries do Panda+, sincroniza com Cloudflare Workers (multi-API), gere downloads e copiados, e apresenta uma Dashboard com filtros, posters, notas e exportação. Modifica também os links do header para incluir ?watch_more=1 e adiciona item "Destaques".
+// @description  Conta e guarda filmes/séries do TVCine, sincroniza com Cloudflare Workers (multi-API), gere downloads e copiados, e apresenta uma Dashboard com filtros, posters, notas e exportação. Modifica também os links do header para incluir ?watch_more=1 e adiciona item "Destaques".
 // @author       Leinad4Mind
 // @license      MIT
-// @icon         https://www.google.com/s2/favicons?sz=64&domain=pandaplus.pt
-// @match        https://pandaplus.pt/*
-// @match        https://www.pandaplus.pt/*
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=tvcine.pt
+// @match        https://tvcine.pt/*
+// @match        https://www.tvcine.pt/*
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_setClipboard
@@ -19,7 +19,7 @@
 /*
  * CHANGELOG
  * ─────────────────────────────────────────────────────────────────────────────
- * v1.0.0 (2025-04) — Versão inicial para Panda+ (pandaplus.pt)
+ * v1.0.0 (2025-04) — Versão inicial para TVCine (tvcine.pt)
  *           Baseado na arquitetura do FilmTwist userscript com adaptações:
  *           • Cards: a[href^='/conteudo/'] (seletor raiz é o próprio <a>)
  *           • Poster: .thumbnail { background-image: url(...) }
@@ -68,7 +68,7 @@
  *             estrutura DOM (swiper-slide, .relative, layouts futuros)
  *           • Overlay e badges visíveis na página inicial e carroséis
  *
- * v1.6.0 (2026-04-15) — Dashboard — identidade visual Panda+
+ * v1.6.0 (2026-04-15) — Dashboard — identidade visual TVCine
  *           • Título do dashboard: PANDA_PLUS → PANDA+
  *           • Ponto de estado no header do dashboard: vermelho → laranja
  *             (#ffa61a) com glow a combinar
@@ -76,7 +76,7 @@
  *           • Hover nos títulos dos cards do dashboard: laranja (#ffa61a)
  *           • Botão "Gerir APIs cloud" no painel flutuante: roxo → laranja
  *
- * v1.7.0 (2026-04-15) — Modal "APIS CLOUD" — identidade visual Panda+
+ * v1.7.0 (2026-04-15) — Modal "APIS CLOUD" — identidade visual TVCine
  *           • Gradient do header da modal: vermelho → laranja (#ffa61a)
  *           • Ponto de estado e glow: vermelho → laranja
  *           • Borda exterior da caixa (glow ring): vermelho → laranja
@@ -106,20 +106,20 @@
        CONSTANTES
        ===================================================================== */
 
-    const STORE_CATALOG = "panda_catalog";        // histórico visto/guardado
-    const STORE_DOWNLOADED = "panda_downloaded";     // transferidos definitivamente
-    const STORE_DOWNLOAD_LIST = "panda_download_list";  // copiados temporários
-    const STORE_EXTRA_FIELD = "panda_extra_field";    // notas de série
-    const STORE_API_CONFIGS = "panda_api_configs";    // configurações das APIs cloud
+    const STORE_CATALOG = "tvcine_catalog";        // histórico visto/guardado
+    const STORE_DOWNLOADED = "tvcine_downloaded";     // transferidos definitivamente
+    const STORE_DOWNLOAD_LIST = "tvcine_download_list";  // copiados temporários
+    const STORE_EXTRA_FIELD = "tvcine_extra_field";    // notas de série
+    const STORE_API_CONFIGS = "tvcine_api_configs";    // configurações das APIs cloud
 
-    const UI_POS_KEY = "panda_ui_pos_v1";
-    const UI_MIN_KEY = "panda_ui_min_v1";
+    const UI_POS_KEY = "tvcine_ui_pos_v1";
+    const UI_MIN_KEY = "tvcine_ui_min_v1";
 
     // Selector raiz dos cards (agora inclui as páginas de episódio)
-    const CARD_ROOT_SELECTOR = "a[href^='/conteudo/'], a[href^='/vod/']";
+    const CARD_ROOT_SELECTOR = ".catalog-movies";
 
     // URL base do site
-    const SITE_ORIGIN = "https://pandaplus.pt";
+    const SITE_ORIGIN = "https://tvcine.pt";
 
     const AUTO_UPDATE_MS = 650;
 
@@ -132,14 +132,14 @@
     let cloudExtraFields = [];
     let _cloudFetchSeq = 0;
 
-    let hideDownloaded = GM_getValue("panda_hide_downloaded_v1", false);
-    let hideHistory = GM_getValue("panda_hide_history_v1", false);
+    let hideDownloaded = GM_getValue("tvcine_hide_downloaded_v1", false);
+    let hideHistory = GM_getValue("tvcine_hide_history_v1", false);
 
     /* =====================================================================
        CACHE DE IMAGENS (IndexedDB)
        ===================================================================== */
 
-    const IMG_DB_NAME = "panda_img_cache_db";
+    const IMG_DB_NAME = "tvcine_img_cache_db";
     const IMG_STORE_NAME = "images";
     const OBJ_URL_CAP = 400;
 
@@ -260,13 +260,13 @@
         a.mcard:hover .ft-cloud-badge,
         [data-ft-card]:hover .ft-cloud-badge { opacity:1 !important; }
         .ft-card-overlay-btns {
-            display:flex; gap:4px; padding:6px;
+            display:flex; gap:12px; padding:12px; justify-content:center;
         }
         .ft-ovl-btn {
-            flex:1; display:flex; align-items:center; justify-content:center; gap:4px;
-            padding:5px 4px; border-radius:5px; border:none; cursor:pointer;
-            font-size:10.5px; font-weight:600; font-family:system-ui,sans-serif;
-            transition:background .12s,transform .1s; white-space:nowrap;
+            width:38px; height:38px; border-radius:50%; border:none; cursor:pointer;
+            display:flex; align-items:center; justify-content:center;
+            font-size:18px; line-height:1; 
+            transition:background .12s,transform .1s; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
         .ft-ovl-btn:hover { transform:scale(1.04); }
         .ft-ovl-btn.catalog { background:rgba(14,165,233,.85); color:#fff; }
@@ -280,7 +280,7 @@
 
         /* ---- Painel hide buttons ---- */
         .ft-hide-btn { padding:6px 12px; border-radius:4px; border:1px solid rgba(255,255,255,0.18);
-            background:rgba(26,27,37,0.9); color:#d4d8e0; cursor:pointer; font-size:12px;
+            background:rgba(26,27,37,0.9); color:#d4d8e0; cursor:pointer; font-size:15px;
             font-family:inherit; display:inline-flex; align-items:center; gap:6px;
             letter-spacing:.01em; transition:background .15s,border-color .15s,color .15s;
             white-space:nowrap; }
@@ -399,7 +399,7 @@
     function isRelevantFTItem(url) {
         if (!url) return false;
         const s = url.toLowerCase();
-        return s.includes("/conteudo/") || s.includes("/vod/");
+        return s.includes("/filmes-e-series/") || s.includes("/conteudo/") || s.includes("/vod/");
     }
 
     /* =====================================================================
@@ -433,7 +433,7 @@
         #ft-toast-container { position:fixed;bottom:20px;right:20px;z-index:1000000;
             display:flex;flex-direction:column;gap:8px;align-items:flex-end;pointer-events:none; }
         .ft-toast { background:rgba(10,14,22,.97);color:#f1f5f9;padding:11px 18px;
-            border-radius:8px;font-size:13.5px;font-weight:500;max-width:340px;
+            border-radius:8px;font-size:16.5px;font-weight:500;max-width:340px;
             font-family:system-ui,-apple-system,sans-serif;
             border:1px solid rgba(255,255,255,.1);border-left:3px solid #dc2626;
             box-shadow:0 8px 24px rgba(0,0,0,.6);backdrop-filter:blur(8px);
@@ -469,9 +469,9 @@
             pToast.className = "ft-toast ft-toast-progress";
             pToast.style.cssText = "width:300px;display:flex;flex-direction:column;gap:8px;";
             pToast.innerHTML = `
-                <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:16px;">
                     <span class="pt-title" style="font-weight:500;"></span>
-                    <span class="pt-pct" style="font-size:11px;color:#94a3b8;">0%</span>
+                    <span class="pt-pct" style="font-size:14px;color:#94a3b8;">0%</span>
                 </div>
                 <div style="width:100%;height:4px;background:rgba(255,255,255,.12);border-radius:2px;overflow:hidden;">
                     <div class="pt-fill" style="width:0%;height:100%;background:#3b82f6;transition:width .2s;border-radius:2px;"></div>
@@ -518,12 +518,12 @@
                 border:1px solid rgba(255,166,26,.15);text-align:center;font-family:system-ui,sans-serif;
                 box-shadow:0 12px 40px rgba(0,0,0,.8),0 0 0 1px rgba(255,166,26,.05);`;
             box.innerHTML = `
-                <div style="font-size:32px;margin-bottom:14px;">⚠️</div>
-                <h2 style="margin:0 0 12px;font-size:16px;color:#f1f5f9;letter-spacing:.02em;">${title}</h2>
-                <p style="margin:0 0 24px;font-size:13.5px;color:#cbd5e1;line-height:1.5;">${message}</p>
+                <div style="font-size:35px;margin-bottom:14px;">⚠️</div>
+                <h2 style="margin:0 0 12px;font-size:19px;color:#f1f5f9;letter-spacing:.02em;">${title}</h2>
+                <p style="margin:0 0 24px;font-size:16.5px;color:#cbd5e1;line-height:1.5;">${message}</p>
                 <div style="display:flex;gap:12px;justify-content:center;">
-                    <button id="ft-conf-no" class="focusable" style="padding:10px 20px;background:rgba(255,255,255,.06);color:#94a3b8;border:1px solid rgba(255,255,255,.1);border-radius:8px;cursor:pointer;font-weight:600;font-size:12.5px;transition:background .2s;">Cancelar</button>
-                    <button id="ft-conf-yes" class="focusable" style="padding:10px 20px;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3);border-radius:8px;cursor:pointer;font-weight:600;font-size:12.5px;transition:background .2s;">Confirmar</button>
+                    <button id="ft-conf-no" class="focusable" style="padding:10px 20px;background:rgba(255,255,255,.06);color:#94a3b8;border:1px solid rgba(255,255,255,.1);border-radius:8px;cursor:pointer;font-weight:600;font-size:15.5px;transition:background .2s;">Cancelar</button>
+                    <button id="ft-conf-yes" class="focusable" style="padding:10px 20px;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3);border-radius:8px;cursor:pointer;font-weight:600;font-size:15.5px;transition:background .2s;">Confirmar</button>
                 </div>
             `;
             mod.appendChild(box);
@@ -606,18 +606,34 @@
         const seen = new Set();
 
         for (const art of articles) {
-            const href = normUrl(art.href || toAbsUrl(art.getAttribute("href") || ""));
+            const linkEl = art.querySelector("a") || art;
+            const href = normUrl(linkEl.href || toAbsUrl(linkEl.getAttribute("href") || ""));
             if (!href || !isRelevantFTItem(href)) continue;
             if (seen.has(href)) continue;
             seen.add(href);
 
-            const title = safeTrim(art.getAttribute("alt") || "");
-            const bg = art.querySelector('.thumbnail')?.style.backgroundImage || "";
-            const posterMatch = bg.match(/url\(\s*['"]?(.*?)['"]?\s*\)/);
-            let poster = posterMatch ? posterMatch[1] : "";
-            if (poster.startsWith('"') || poster.startsWith("'")) { poster = poster.substring(1, poster.length - 1); }
+            const titleEl = linkEl.querySelector(".catalog-cover-p");
+            let title = titleEl ? Array.from(titleEl.childNodes)
+                .filter(node => node.nodeType === Node.TEXT_NODE)
+                .map(node => node.textContent)
+                .join(" ")
+                .trim() : "";
+                
+            const spanTitle = titleEl?.querySelector("span");
+            if (spanTitle) {
+                 title += " " + spanTitle.textContent.trim();
+            }
+            if(!title) {
+                 title = safeTrim(linkEl.getAttribute("alt") || "");
+            }
 
-            all.push({ url: href, title, poster });
+            const imgEl = linkEl.querySelector("img.catalog-cover, img");
+            let poster = imgEl ? (imgEl.getAttribute("data-src") || imgEl.getAttribute("src") || "") : "";
+            
+            // Força a imagem de alta resolução (remove _s antes da extensão)
+            if (poster) poster = poster.replace(/_s\.([^.]+)$/i, '.$1');
+
+            all.push({ url: href, title: safeTrim(title), poster });
         }
         return { all: mergeData(all) };
     }
@@ -932,14 +948,26 @@
     }
 
     function applyCardState(root, cache, cloudMap, configs, excludedFromHide, readableApiNames) {
-        // No Panda+, root é o próprio <a href="/conteudo/..."> — não tem filho link
-        const href = normUrl(root.href || toAbsUrl(root.getAttribute("href") || ""));
+        // No TVCine, root é .catalog-movies e link é o <a> interior
+        const linkEl = root.querySelector("a") || root;
+        const href = normUrl(linkEl.href || toAbsUrl(linkEl.getAttribute("href") || ""));
         if (!href || !isRelevantFTItem(href)) return false;
 
-        // Marcar com data-ft-card para o CSS de hover funcionar em qualquer contexto DOM
-        // (filtros usam .relative, homepage usa .swiper-slide — sem classe comum)
+        // Marcar com data-ft-card para o CSS de hover funcionar
         root.setAttribute('data-ft-card', '1');
-        root.style.position = root.style.position || 'relative';
+        
+        let imgWrapper = linkEl.querySelector('.ft-img-wrapper');
+        const rawImg = linkEl.querySelector("img.catalog-cover, img");
+        if (rawImg && !imgWrapper) {
+             imgWrapper = document.createElement("div");
+             imgWrapper.className = "ft-img-wrapper";
+             imgWrapper.style.position = "relative";
+             imgWrapper.style.display = "flex";
+             rawImg.parentNode.insertBefore(imgWrapper, rawImg);
+             imgWrapper.appendChild(rawImg);
+        }
+        const insertTarget = imgWrapper || root;
+        insertTarget.style.position = insertTarget.style.position || 'relative';
 
         // Estado local
         const isCatalog = cache.setCatalog.has(href);
@@ -960,13 +988,11 @@
         const visuallyCatalog = isCatalog || isCatalogCloud;
         const meetsHide = isDownloaded || (isSavedInCloud && !isOnlyExcluded);
 
-        // Container a ocultar: a estrutura é .relative > a, então ocultamos o .relative
-        const container = root.parentElement?.classList.contains("relative")
-            ? root.parentElement
-            : root.parentElement || root;
+        // Container a ocultar: no TVCine é a própria div .catalog-movies (root)
+        const container = root;
 
-        root.style.boxShadow = "";
-        root.style.transition = "all 0.2s ease";
+        insertTarget.style.boxShadow = "";
+        insertTarget.style.transition = "all 0.2s ease";
 
         if ((meetsHide && hideDownloaded) || (visuallyCatalog && hideHistory)) {
             container.style.display = "none";
@@ -976,7 +1002,7 @@
         }
 
         // Cloud badge (canto top-left)
-        root.querySelector('.ft-cloud-badge')?.remove();
+        insertTarget.querySelector('.ft-cloud-badge')?.remove();
         if (isSavedInCloud || visuallyCatalog) {
             const badge = document.createElement("div");
             badge.className = "ft-cloud-badge";
@@ -984,13 +1010,13 @@
 
             if (visuallyCatalog) {
                 const icon = document.createElement("div");
-                icon.style.cssText = "background:rgba(0,0,0,0.72);color:#38bdf8;display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;border:1px dashed rgba(14,165,233,0.6);font-size:12px;";
+                icon.style.cssText = "background:rgba(0,0,0,0.72);color:#38bdf8;display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;border:1px dashed rgba(14,165,233,0.6);font-size:15px;";
                 icon.title = "No catálogo/histórico"; icon.innerHTML = "📜";
                 badge.appendChild(icon);
             }
             if (isSavedInCloud) {
                 const pill = document.createElement("div");
-                pill.style.cssText = "background:rgba(0,0,0,0.8);color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid rgba(255,255,255,0.18);font-weight:bold;display:flex;align-items:center;gap:3px;";
+                pill.style.cssText = "background:rgba(0,0,0,0.8);color:#fff;font-size:13px;padding:2px 6px;border-radius:4px;border:1px solid rgba(255,255,255,0.18);font-weight:bold;display:flex;align-items:center;gap:3px;";
                 let names = "";
                 cloudNames.forEach((n, idx) => {
                     const match = dlCloudItems.find(i => i.apiName === n);
@@ -999,13 +1025,13 @@
                 pill.innerHTML = `${ICONS.cloud}<span>${names}</span>`;
                 badge.appendChild(pill);
             }
-            root.style.position = "relative";
-            root.appendChild(badge);
+            insertTarget.style.position = "relative";
+            insertTarget.appendChild(badge);
         }
 
         // Overlay de hover com botões de gestão
-        root.querySelector('.ft-card-overlay')?.remove();
-        root.style.position = "relative";
+        insertTarget.querySelector('.ft-card-overlay')?.remove();
+        insertTarget.style.position = "relative";
         const overlay = document.createElement("div");
         overlay.className = "ft-card-overlay";
 
@@ -1016,14 +1042,21 @@
         const btnCat = document.createElement("button");
         btnCat.className = "ft-ovl-btn catalog" + (isCatalog ? " active" : "");
         btnCat.title = isCatalog ? "Remover do catálogo" : "Guardar no catálogo";
-        btnCat.innerHTML = isCatalog ? "✓ Catálogo" : "💾 Guardar";
+        btnCat.innerHTML = isCatalog ? "✓" : "💾";
         btnCat.addEventListener("click", async (e) => {
             e.preventDefault(); e.stopPropagation();
             const existing = getStored(STORE_CATALOG);
-            const title = safeTrim(root.getAttribute("alt") || "");
-            const bg = root.querySelector('.thumbnail')?.style.backgroundImage || "";
-            const posterMatch = bg.match(/url\(\s*['"]?(.*?)['"]?\s*\)/);
-            const poster = posterMatch ? posterMatch[1].replace(/["']/g, '') : "";
+            
+            const titleEl = root.querySelector(".catalog-cover-p");
+            let title = titleEl ? Array.from(titleEl.childNodes).filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join(" ").trim() : "";
+            const spanTitle = titleEl?.querySelector("span");
+            if(spanTitle) title += " " + spanTitle.textContent.trim();
+            title = safeTrim(title);
+            
+            const imgEl = root.querySelector("img.catalog-cover, img");
+            let poster = imgEl ? (imgEl.getAttribute("data-src") || imgEl.getAttribute("src") || "") : "";
+            if (poster) poster = poster.replace(/_s\.([^.]+)$/i, '.$1');
+            
             if (isCatalog) {
                 setStored(STORE_CATALOG, existing.filter(i => i.url !== href));
                 toast("Removido do catálogo.");
@@ -1040,13 +1073,19 @@
         const btnDwn = document.createElement("button");
         btnDwn.className = "ft-ovl-btn downloaded" + (isDownloaded ? " active" : "");
         btnDwn.title = isDownloaded ? "Remover Transferidos" : "Marcar Transferidos";
-        btnDwn.innerHTML = isDownloaded ? "✅ Remover Transferidos" : "❌ Marcar Transferidos";
+        btnDwn.innerHTML = isDownloaded ? "✅" : "❌";
         btnDwn.addEventListener("click", async (e) => {
             e.preventDefault(); e.stopPropagation();
-            const title = safeTrim(root.getAttribute("alt") || "");
-            const bg = root.querySelector('.thumbnail')?.style.backgroundImage || "";
-            const posterMatch = bg.match(/url\(\s*['"]?(.*?)['"]?\s*\)/);
-            const poster = posterMatch ? posterMatch[1].replace(/["']/g, '') : "";
+            const titleEl = root.querySelector(".catalog-cover-p");
+            let title = titleEl ? Array.from(titleEl.childNodes).filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join(" ").trim() : "";
+            const spanTitle = titleEl?.querySelector("span");
+            if(spanTitle) title += " " + spanTitle.textContent.trim();
+            title = safeTrim(title);
+            
+            const imgEl = root.querySelector("img.catalog-cover, img");
+            let poster = imgEl ? (imgEl.getAttribute("data-src") || imgEl.getAttribute("src") || "") : "";
+            if (poster) poster = poster.replace(/_s\.([^.]+)$/i, '.$1');
+            
             if (isDownloaded) {
                 setStored(STORE_DOWNLOADED, getStored(STORE_DOWNLOADED).filter(i => i.url !== href));
                 toast("Removido de 'Já temos'.");
@@ -1062,19 +1101,19 @@
         btns.appendChild(btnDwn);
 
         overlay.appendChild(btns);
-        root.appendChild(overlay);
+        insertTarget.appendChild(overlay);
 
         // Opacidade e borda — usa o card-image wrapper interno
-        const imgWrapper = root.querySelector('.card-image') || root.querySelector('.thumbnail') || root;
+        const _opWrapper = rawImg || insertTarget;
         if (visuallySaved) {
-            imgWrapper.style.opacity = "0.35";
-            if (isCopied && !isDownloaded) root.style.boxShadow = "0 0 0 3px #ffc107";
-            else if (isSavedInCloud && !isDownloaded) root.style.boxShadow = `0 0 0 3px ${getApiColor(cloudNames[0], configs)}`;
-            else root.style.boxShadow = "0 0 0 3px #10b981";
-            root.style.borderRadius = "6px";
+            _opWrapper.style.opacity = "0.35";
+            if (isCopied && !isDownloaded) insertTarget.style.boxShadow = "0 0 0 3px #ffc107";
+            else if (isSavedInCloud && !isDownloaded) insertTarget.style.boxShadow = `0 0 0 3px ${getApiColor(cloudNames[0], configs)}`;
+            else insertTarget.style.boxShadow = "0 0 0 3px #10b981";
+            insertTarget.style.borderRadius = "6px";
         } else {
-            imgWrapper.style.opacity = "1";
-            root.style.boxShadow = "";
+            _opWrapper.style.opacity = "1";
+            insertTarget.style.boxShadow = "";
         }
 
         return false;
@@ -1146,9 +1185,9 @@
             `<div style="padding:7px 9px;background:rgba(8,12,20,.98);">
                 <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
                     <span style="color:${color};opacity:.75;line-height:0;">${icon}</span>
-                    <span style="font-size:14px;font-weight:700;color:${color};line-height:1;">${val}</span>
+                    <span style="font-size:17px;font-weight:700;color:${color};line-height:1;">${val}</span>
                 </div>
-                <div style="font-size:9px;color:#64748b;letter-spacing:.07em;text-transform:uppercase;">${label}</div>
+                <div style="font-size:12px;color:#64748b;letter-spacing:.07em;text-transform:uppercase;">${label}</div>
             </div>`;
         statsEl.innerHTML =
             `<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,.05);border-radius:9px;overflow:hidden;">
@@ -1178,7 +1217,7 @@
             color:${danger ? "#f87171" : "#e2e8f0"};
             border:1px solid rgba(255,255,255,.08);
             border-left:2px solid ${danger ? "#ef4444" : accent};
-            cursor:pointer;text-align:left;font-size:12.5px;
+            cursor:pointer;text-align:left;font-size:15.5px;
             font-family:inherit;font-weight:500;letter-spacing:0.01em;
             transition:background .15s,border-color .15s,color .15s;`;
         b.addEventListener("mouseover", () => {
@@ -1221,7 +1260,7 @@
         title.innerHTML = `
             <span style="width:7px;height:7px;border-radius:50%;background:#ffa61a;
                 box-shadow:0 0 8px rgba(255,166,26,.8);flex-shrink:0;display:inline-block;"></span>
-            <span style="font-weight:700;font-size:11.5px;letter-spacing:.14em;color:#f1f5f9;">PANDA+</span>`;
+            <span style="font-weight:700;font-size:14.5px;letter-spacing:.14em;color:#f1f5f9;">TVCINE</span>`;
 
         const svgMin = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
         const svgMax = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>`;
@@ -1322,12 +1361,12 @@
 
     function injectHideButtons() {
         if (document.getElementById("ft-hide-btns")) return;
-        const sortEl = document.querySelector(".header-1 .nav-bar .right-side-navbar");
-        if (!sortEl) return;
+        const filterDiv = document.querySelector(".filter-catalog-div");
+        if (!filterDiv) return;
 
         const wrapper = document.createElement("div");
         wrapper.id = "ft-hide-btns";
-        wrapper.style.cssText = "display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;margin-left:auto;";
+        wrapper.style.cssText = "display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;margin-left:auto;padding-right:20px;";
 
         const svgEye = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`;
         const svgEyeOff = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>`;
@@ -1347,13 +1386,21 @@
 
         wrapper.append(
             createBtn("ft-hide-down", "Mostrar transferidos", "Ocultar transferidos", hideDownloaded,
-                (v) => { hideDownloaded = v; GM_setValue("panda_hide_downloaded_v1", v); highlightSavedLinks(); }),
+                (v) => { hideDownloaded = v; GM_setValue("tvcine_hide_downloaded_v1", v); highlightSavedLinks(); }),
             createBtn("ft-hide-hist", "Mostrar catálogo", "Ocultar catálogo", hideHistory,
-                (v) => { hideHistory = v; GM_setValue("panda_hide_history_v1", v); highlightSavedLinks(); })
+                (v) => { hideHistory = v; GM_setValue("tvcine_hide_history_v1", v); highlightSavedLinks(); })
         );
 
-        // Insere antes do sort
-        sortEl.parentElement?.insertBefore(wrapper, sortEl);
+        // Insere após os select filters
+        const filterGroup = filterDiv.querySelector(".fliter-group");
+        if (filterGroup) {
+             filterGroup.style.display = "flex";
+             filterGroup.style.flexWrap = "wrap";
+             filterGroup.style.alignItems = "center";
+             filterGroup.appendChild(wrapper);
+        } else {
+             filterDiv.appendChild(wrapper);
+        }
     }
 
     /* =====================================================================
@@ -1516,7 +1563,7 @@
 
         const inputCSS = `width:100%;padding:9px 12px;background:rgba(255,255,255,.04);color:#e2e8f0;
             border:1px solid rgba(255,255,255,.09);border-radius:8px;box-sizing:border-box;
-            font-size:12.5px;font-family:inherit;outline:none;transition:border-color .15s;`;
+            font-size:15.5px;font-family:inherit;outline:none;transition:border-color .15s;`;
         const checkCSS = `accent-color:#ffa61a;width:14px;height:14px;cursor:pointer;`;
 
         const renderList = () => {
@@ -1526,7 +1573,7 @@
 
             let listHtml = "";
             if (!configs.length) {
-                listHtml = `<div style="padding:20px;text-align:center;color:#334155;font-size:12px;border:1px dashed rgba(255,255,255,.06);border-radius:10px;">
+                listHtml = `<div style="padding:20px;text-align:center;color:#334155;font-size:15px;border:1px dashed rgba(255,255,255,.06);border-radius:10px;">
                     Nenhuma API configurada ainda.
                 </div>`;
             } else {
@@ -1536,23 +1583,23 @@
                     const safeName = esc(api.name);
                     const safeColor = esc(getApiColor(api.name, configs));
                     const actionBtn = (cls, label, bg) =>
-                        `<button data-idx="${idx}" class="${cls}" style="padding:4px 10px;background:${bg};color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;font-weight:500;">${label}</button>`;
+                        `<button data-idx="${idx}" class="${cls}" style="padding:4px 10px;background:${bg};color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500;">${label}</button>`;
                     listHtml += `
                     <div style="background:rgba(255,255,255,.03);padding:12px 14px;border-radius:10px;margin-bottom:8px;border:1px solid rgba(255,255,255,.06);">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${api.apiKey ? '10px' : '0'};">
-                            <span style="font-size:13px;font-weight:600;color:${safeColor};letter-spacing:.02em;">${safeName}</span>
+                            <span style="font-size:16px;font-weight:600;color:${safeColor};letter-spacing:.02em;">${safeName}</span>
                             <div style="display:flex;gap:6px;">
                                 ${actionBtn("ft-edit-api-btn", "Editar", "rgba(100,116,139,.3)")}
                                 ${actionBtn("ft-del-api-btn", "Remover", "rgba(220,38,38,.2)")}
                             </div>
                         </div>
                         ${api.apiKey ? `<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;padding-top:8px;border-top:1px solid rgba(255,255,255,.05);">
-                            <span style="font-size:10px;color:#475569;margin-right:2px;letter-spacing:.06em;text-transform:uppercase;">Gestão:</span>
+                            <span style="font-size:13px;color:#475569;margin-right:2px;letter-spacing:.06em;text-transform:uppercase;">Gestão:</span>
                             ${actionBtn("ft-restore-btn", "⬇ Restaurar local", "rgba(37,99,235,.25)")}
                             ${hasCatalog ? actionBtn("ft-purge-catalog-btn", "✕ Catálogo", "rgba(14,165,233,.2)") : ''}
                             ${hasDown ? actionBtn("ft-purge-down-btn", "✕ Transferidos", "rgba(194,65,12,.25)") : ''}
                         </div>` : ''}
-                        <div style="display:flex;gap:12px;margin-top:7px;font-size:10.5px;">
+                        <div style="display:flex;gap:12px;margin-top:7px;font-size:13.5px;">
                             <span style="color:${api.apiKey ? '#10b981' : '#475569'};">${api.apiKey ? '● Write access' : '○ Apenas leitura'}</span>
                             ${api.excludeFromCopy ? `<span style="color:#ef4444;">✕ Não copiar transferidos</span>` : ''}
                             ${api.excludeFromHide ? `<span style="color:#f59e0b;">◎ Não ocultar do ecrã</span>` : ''}
@@ -1566,16 +1613,16 @@
             <div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(105deg,rgba(255,166,26,.1),rgba(8,12,20,0));">
                 <div style="display:flex;align-items:center;gap:10px;">
                     <span style="width:7px;height:7px;border-radius:50%;background:#ffa61a;box-shadow:0 0 8px rgba(255,166,26,.8);display:inline-block;"></span>
-                    <span style="font-size:12.5px;font-weight:700;letter-spacing:.12em;color:#f1f5f9;">APIS CLOUD</span>
+                    <span style="font-size:15.5px;font-weight:700;letter-spacing:.12em;color:#f1f5f9;">APIS CLOUD</span>
                 </div>
-                <button type="button" id="ft-tut-btn" style="padding:6px 12px;background:rgba(139,92,246,.2);color:#c4b5fd;border:1px solid rgba(139,92,246,.3);border-radius:7px;font-size:11px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px;">
+                <button type="button" id="ft-tut-btn" style="padding:6px 12px;background:rgba(139,92,246,.2);color:#c4b5fd;border:1px solid rgba(139,92,246,.3);border-radius:7px;font-size:14px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px;">
                     ${iSvg} Passo-a-Passo
                 </button>
             </div>
 
             <!-- Scroll body -->
             <div style="overflow-y:auto;padding:16px 20px;flex:1;">
-                <p style="font-size:11.5px;color:#475569;margin:0 0 14px;line-height:1.5;">
+                <p style="font-size:14.5px;color:#475569;margin:0 0 14px;line-height:1.5;">
                     Adiciona URLs das tuas Worker APIs. Fornece API Key apenas se for a tua base de dados (write access).
                 </p>
                 <div id="ft-api-list" style="margin-bottom:14px;">${listHtml}</div>
@@ -1583,25 +1630,25 @@
                 <!-- Add / Edit form -->
                 <div style="background:rgba(255,255,255,.025);padding:14px;border-radius:10px;border:1px solid rgba(255,255,255,.06);">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-                        <span style="font-size:11.5px;font-weight:600;color:#94a3b8;letter-spacing:.08em;text-transform:uppercase;">${isEditing ? `Editar: ${editingName}` : 'Nova API'}</span>
-                        ${isEditing ? `<span id="ft-cancel-edit" style="color:#475569;cursor:pointer;font-size:11px;">Cancelar</span>` : ''}
+                        <span style="font-size:14.5px;font-weight:600;color:#94a3b8;letter-spacing:.08em;text-transform:uppercase;">${isEditing ? `Editar: ${editingName}` : 'Nova API'}</span>
+                        ${isEditing ? `<span id="ft-cancel-edit" style="color:#475569;cursor:pointer;font-size:14px;">Cancelar</span>` : ''}
                     </div>
                     <input id="ft-api-name" placeholder="Nome (ex: A minha cloud)" style="${inputCSS}margin-bottom:8px;">
                     <input id="ft-api-url"  placeholder="URL (ex: https://api.exemplo.workers.dev)" style="${inputCSS}margin-bottom:8px;">
                     <div style="display:flex;gap:6px;margin-bottom:12px;align-items:stretch;">
                         <input type="password" id="ft-api-key" placeholder="API Key Secreta (opcional — write access)" style="${inputCSS}margin-bottom:0;flex:1;">
                         <button type="button" id="ft-api-gen-key" title="Gerar chave aleatória segura"
-                            style="padding:0 12px;background:rgba(139,92,246,.2);color:#c4b5fd;border:1px solid rgba(139,92,246,.3);border-radius:8px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;font-family:inherit;">✦ Gerar</button>
+                            style="padding:0 12px;background:rgba(139,92,246,.2);color:#c4b5fd;border:1px solid rgba(139,92,246,.3);border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;white-space:nowrap;font-family:inherit;">✦ Gerar</button>
                     </div>
-                    <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:#64748b;margin-bottom:8px;cursor:pointer;">
+                    <label style="display:flex;align-items:center;gap:8px;font-size:14.5px;color:#64748b;margin-bottom:8px;cursor:pointer;">
                         <input type="checkbox" id="ft-api-exc-copy" style="${checkCSS}">Não copiar transferidos desta nuvem
                     </label>
-                    <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:#64748b;margin-bottom:14px;cursor:pointer;">
+                    <label style="display:flex;align-items:center;gap:8px;font-size:14.5px;color:#64748b;margin-bottom:14px;cursor:pointer;">
                         <input type="checkbox" id="ft-api-exc-hide" style="${checkCSS}">Não esconder filmes desta nuvem ao ocultar
                     </label>
                     <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <button id="ft-api-close" style="padding:8px 14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);color:#94a3b8;border-radius:8px;cursor:pointer;font-size:12px;">Fechar</button>
-                        <button id="ft-api-save"  style="padding:8px 18px;background:${isEditing ? 'rgba(16,185,129,.2)' : 'rgba(37,99,235,.25)'};color:${isEditing ? '#6ee7b7' : '#93c5fd'};border:1px solid ${isEditing ? 'rgba(16,185,129,.35)' : 'rgba(37,99,235,.35)'};border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">${isEditing ? 'Atualizar API' : '+ Guardar API'}</button>
+                        <button id="ft-api-close" style="padding:8px 14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);color:#94a3b8;border-radius:8px;cursor:pointer;font-size:15px;">Fechar</button>
+                        <button id="ft-api-save"  style="padding:8px 18px;background:${isEditing ? 'rgba(16,185,129,.2)' : 'rgba(37,99,235,.25)'};color:${isEditing ? '#6ee7b7' : '#93c5fd'};border:1px solid ${isEditing ? 'rgba(16,185,129,.35)' : 'rgba(37,99,235,.35)'};border-radius:8px;cursor:pointer;font-size:15px;font-weight:600;">${isEditing ? 'Atualizar API' : '+ Guardar API'}</button>
                     </div>
                 </div>
             </div>`;
@@ -1806,11 +1853,11 @@
             @media (max-width: 720px)  { .ft-grid-poster,.ft-grid-card { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
             .ft-input { background:rgba(255,255,255,.05) !important; border:1px solid rgba(255,255,255,.10) !important;
                 color:#e2e8f0 !important; padding:9px 13px !important; border-radius:8px !important;
-                outline:none; transition:border-color .15s; font-size:13px;
+                outline:none; transition:border-color .15s; font-size:16px;
                 color-scheme:dark; }
             .ft-input:focus { border-color:rgba(255,166,26,.5) !important; }
             .ft-input option { background:#0f172a !important; color:#e2e8f0 !important; }
-            .ft-btn { border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-weight:600;font-size:12.5px;
+            .ft-btn { border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-weight:600;font-size:15.5px;
                 transition:opacity .15s,transform .1s; }
             .ft-btn:hover { opacity:.85; transform:translateY(-1px); }
             .ft-btn:active { transform:translateY(0); }
@@ -1832,14 +1879,14 @@
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;padding-bottom:18px;border-bottom:1px solid rgba(255,255,255,.08);">
     <div style="display:flex;align-items:center;gap:12px;">
       <span style="width:9px;height:9px;border-radius:50%;background:#ffa61a;box-shadow:0 0 10px rgba(255,166,26,.9);display:inline-block;"></span>
-      <span style="font-size:15px;font-weight:700;letter-spacing:.12em;color:#f1f5f9;">PANDA+</span>
-      <span style="font-size:11px;color:#94a3b8;letter-spacing:.06em;font-weight:500;">DASHBOARD</span>
+      <span style="font-size:18px;font-weight:700;letter-spacing:.12em;color:#f1f5f9;">PANDA+</span>
+      <span style="font-size:14px;color:#94a3b8;letter-spacing:.06em;font-weight:500;">DASHBOARD</span>
     </div>
     <button @click="close" class="ft-btn" style="background:rgba(220,38,38,.15);color:#f87171;border:1px solid rgba(220,38,38,.3);">Fechar</button>
   </div>
 
   <!-- Scraping progress -->
-  <div v-if="pendingRef.length > 0" style="background:rgba(234,179,8,.08);color:#fbbf24;padding:12px 16px;border-radius:10px;margin-bottom:24px;font-size:13px;font-weight:500;border:1px solid rgba(234,179,8,.2);">
+  <div v-if="pendingRef.length > 0" style="background:rgba(234,179,8,.08);color:#fbbf24;padding:12px 16px;border-radius:10px;margin-bottom:24px;font-size:16px;font-weight:500;border:1px solid rgba(234,179,8,.2);">
     <span v-if="scrapeTotal > 0">A processar {{ scrapeCurrent }} de {{ scrapeTotal }} itens...</span>
     <span v-else>A preparar processamento de {{ pendingRef.length }} itens...</span>
   </div>
@@ -1848,10 +1895,10 @@
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%;margin-bottom:16px;">
     <div v-for="(v,l) in statCards" :key="l"
          style="background:rgba(255,255,255,.03);padding:18px 20px;border-radius:12px;border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:14px;">
-      <div :style="{background:v.color+'1a',borderColor:v.color+'44'}" style="width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;border:1px solid;flex-shrink:0;">{{ v.icon }}</div>
+      <div :style="{background:v.color+'1a',borderColor:v.color+'44'}" style="width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:21px;border:1px solid;flex-shrink:0;">{{ v.icon }}</div>
       <div>
-        <div :style="{color:v.color}" style="font-size:26px;font-weight:700;line-height:1;">{{ v.count }}</div>
-        <div style="font-size:11px;color:#94a3b8;margin-top:3px;letter-spacing:.06em;text-transform:uppercase;">{{ l }}</div>
+        <div :style="{color:v.color}" style="font-size:29px;font-weight:700;line-height:1;">{{ v.count }}</div>
+        <div style="font-size:14px;color:#94a3b8;margin-top:3px;letter-spacing:.06em;text-transform:uppercase;">{{ l }}</div>
       </div>
     </div>
   </div>
@@ -1861,14 +1908,14 @@
     <div v-for="c in st.cloudStats" :key="c.name"
          :style="{borderColor:c.color+'44'}"
          style="background:rgba(255,255,255,.02);padding:14px 18px;border-radius:12px;border:1px solid;min-width:200px;flex:1;">
-      <div :style="{color:c.color}" style="font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;">☁ {{ c.name }}</div>
+      <div :style="{color:c.color}" style="font-size:15px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;">☁ {{ c.name }}</div>
       <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
-        <span style="font-size:12px;color:#64748b;">Catálogo</span>
-        <span style="font-size:13px;font-weight:600;color:#e2e8f0;">{{ c.catalog }}</span>
+        <span style="font-size:15px;color:#64748b;">Catálogo</span>
+        <span style="font-size:16px;font-weight:600;color:#e2e8f0;">{{ c.catalog }}</span>
       </div>
       <div style="display:flex;justify-content:space-between;">
-        <span style="font-size:12px;color:#64748b;">Transferidos</span>
-        <span style="font-size:13px;font-weight:600;color:#10b981;">{{ c.downloaded }}</span>
+        <span style="font-size:15px;color:#64748b;">Transferidos</span>
+        <span style="font-size:16px;font-weight:600;color:#10b981;">{{ c.downloaded }}</span>
       </div>
     </div>
   </div>
@@ -1893,7 +1940,7 @@
     <button @click="exportFiltered" class="ft-btn" style="background:rgba(16,185,129,.15);color:#6ee7b7;border:1px solid rgba(16,185,129,.25);">Exportar atuais</button>
     <div style="display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap;">
       <input type="date" v-model="dateStart" class="ft-input" placeholder="dd/mm/aaaa">
-      <span style="font-size:11px;color:#94a3b8;">até</span>
+      <span style="font-size:14px;color:#94a3b8;">até</span>
       <input type="date" v-model="dateEnd" class="ft-input" placeholder="dd/mm/aaaa">
     </div>
   </div>
@@ -1901,7 +1948,7 @@
   <!-- Grid -->
   <div v-if="filtered.length===0" style="padding:48px;text-align:center;color:#64748b;background:rgba(255,255,255,.02);border:1px dashed rgba(255,255,255,.08);border-radius:12px;">Nenhum título correspondente.</div>
   <div v-else>
-    <div style="text-align:center;margin-bottom:14px;font-size:12px;color:#94a3b8;letter-spacing:.04em;">A mostrar {{ displayed.length }} de {{ filtered.length }} resultados</div>
+    <div style="text-align:center;margin-bottom:14px;font-size:15px;color:#94a3b8;letter-spacing:.04em;">A mostrar {{ displayed.length }} de {{ filtered.length }} resultados</div>
     <div :class="['ft-grid', viewMode==='poster' ? 'ft-grid-poster' : 'ft-grid-card']">
     <div v-for="item in displayed" :key="item.url" :style="cardStyle(item)" @mouseenter="cardHover($event,true)" @mouseleave="cardHover($event,false)">
       <div :style="{aspectRatio:ar}" style="display:block;position:relative;overflow:hidden;background:#000;border-radius:8px 8px 0 0;">
@@ -1912,45 +1959,45 @@
         </a>
         <div style="position:absolute;top:8px;left:8px;display:flex;flex-wrap:wrap;width:90%;pointer-events:none;">
           <span v-for="src in item.sources" :key="src.name" :style="{color:src.color}"
-                style="background:rgba(0,0,0,.88);padding:2px 6px;border-radius:4px;font-size:9.5px;margin-right:4px;margin-bottom:4px;border:1px solid rgba(255,255,255,.15);font-weight:600;letter-spacing:.04em;">
+                style="background:rgba(0,0,0,.88);padding:2px 6px;border-radius:4px;font-size:12.5px;margin-right:4px;margin-bottom:4px;border:1px solid rgba(255,255,255,.15);font-weight:600;letter-spacing:.04em;">
             {{ badgeIcon(item,src.name) }} {{ src.name }}
           </span>
-          <span v-if="item.isLocal" style="background:rgba(0,0,0,.88);color:#10b981;padding:2px 6px;border-radius:4px;font-size:9.5px;margin-right:4px;margin-bottom:4px;border:1px solid rgba(16,185,129,.3);font-weight:600;">Local</span>
+          <span v-if="item.isLocal" style="background:rgba(0,0,0,.88);color:#10b981;padding:2px 6px;border-radius:4px;font-size:12.5px;margin-right:4px;margin-bottom:4px;border:1px solid rgba(16,185,129,.3);font-weight:600;">Local</span>
         </div>
         <div @click.prevent="copyPoster(item)"
-             style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,.7);color:#94a3b8;padding:4px 7px;border-radius:5px;font-size:10px;cursor:pointer;border:1px solid rgba(255,255,255,.1);transition:color .15s;" title="Copiar poster">${ICONS.poster}</div>
+             style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,.7);color:#94a3b8;padding:4px 7px;border-radius:5px;font-size:13px;cursor:pointer;border:1px solid rgba(255,255,255,.1);transition:color .15s;" title="Copiar poster">${ICONS.poster}</div>
         <div v-if="item.mediaType==='Série'" @click.stop.prevent="openNoteModal(item)"
-             style="position:absolute;top:8px;right:8px;background:rgba(15,23,42,.9);color:#fff;padding:5px;border-radius:50%;font-size:12px;cursor:pointer;border:1px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;width:26px;height:26px;z-index:20;">
+             style="position:absolute;top:8px;right:8px;background:rgba(15,23,42,.9);color:#fff;padding:5px;border-radius:50%;font-size:15px;cursor:pointer;border:1px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;width:26px;height:26px;z-index:20;">
           <span>{{ item.ft_extra_field ? '📝' : '＋' }}</span>
         </div>
       </div>
       <div style="padding:10px 12px;display:flex;flex-direction:column;flex-grow:1;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px;">
-          <a :href="item.url" target="_blank" style="flex-grow:1;color:#e2e8f0;text-decoration:none;font-weight:600;font-size:12.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.4;"
+          <a :href="item.url" target="_blank" style="flex-grow:1;color:#e2e8f0;text-decoration:none;font-weight:600;font-size:15.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.4;"
            @mouseenter="$event.target.style.color='#ffa61a'" @mouseleave="$event.target.style.color='#e2e8f0'">{{ item.title||'Sem Título' }}</a>
           <div v-if="hasWriteAccess(item)" style="display:flex;gap:2px;flex-shrink:0;">
-            <button @click.prevent="openEditModal(item)" style="background:transparent;color:#475569;border:none;border-radius:4px;padding:3px;cursor:pointer;font-size:12px;transition:color .15s;" @mouseenter="$event.target.style.color='#e2e8f0'" @mouseleave="$event.target.style.color='#475569'" title="Editar">✏️</button>
-            <button @click.prevent="deleteItem(item)"   style="background:transparent;color:#475569;border:none;border-radius:4px;padding:3px;cursor:pointer;font-size:12px;transition:color .15s;" @mouseenter="$event.target.style.color='#ef4444'" @mouseleave="$event.target.style.color='#475569'" title="Eliminar">🗑️</button>
+            <button @click.prevent="openEditModal(item)" style="background:transparent;color:#475569;border:none;border-radius:4px;padding:3px;cursor:pointer;font-size:15px;transition:color .15s;" @mouseenter="$event.target.style.color='#e2e8f0'" @mouseleave="$event.target.style.color='#475569'" title="Editar">✏️</button>
+            <button @click.prevent="deleteItem(item)"   style="background:transparent;color:#475569;border:none;border-radius:4px;padding:3px;cursor:pointer;font-size:15px;transition:color .15s;" @mouseenter="$event.target.style.color='#ef4444'" @mouseleave="$event.target.style.color='#475569'" title="Eliminar">🗑️</button>
           </div>
         </div>
-        <div style="font-size:10.5px;color:#64748b;margin-top:auto;padding-top:7px;border-top:1px solid rgba(255,255,255,.05);">
+        <div style="font-size:13.5px;color:#64748b;margin-top:auto;padding-top:7px;border-top:1px solid rgba(255,255,255,.05);">
           {{ fmtDate(item.saved_at) }}
         </div>
       </div>
     </div>
     </div>
     <div ref="sentinel" style="height:1px;"></div>
-    <div v-if="displayed.length < filtered.length" style="text-align:center;padding:24px;color:#64748b;font-size:12px;">A carregar mais...</div>
-    <div v-else-if="filtered.length > 0" style="text-align:center;padding:24px;color:#64748b;font-size:12px;">{{ filtered.length }} itens carregados</div>
+    <div v-if="displayed.length < filtered.length" style="text-align:center;padding:24px;color:#64748b;font-size:15px;">A carregar mais...</div>
+    <div v-else-if="filtered.length > 0" style="text-align:center;padding:24px;color:#64748b;font-size:15px;">{{ filtered.length }} itens carregados</div>
   </div>
 
   <!-- Modal edição -->
   <div v-if="editingItem" style="position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);">
     <div style="background:#0f172a;padding:28px;border-radius:14px;width:90%;max-width:500px;border:1px solid rgba(255,255,255,.1);">
-      <h2 style="margin-top:0;font-size:16px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:12px;margin-bottom:20px;color:#f1f5f9;">Editar</h2>
-      <label style="display:block;margin-bottom:6px;font-size:12px;color:#64748b;letter-spacing:.06em;text-transform:uppercase;">Título</label>
+      <h2 style="margin-top:0;font-size:19px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:12px;margin-bottom:20px;color:#f1f5f9;">Editar</h2>
+      <label style="display:block;margin-bottom:6px;font-size:15px;color:#64748b;letter-spacing:.06em;text-transform:uppercase;">Título</label>
       <input type="text" v-model="editingItem.title" class="ft-input" style="width:100%;box-sizing:border-box;margin-bottom:14px;">
-      <label style="display:block;margin-bottom:6px;font-size:12px;color:#64748b;letter-spacing:.06em;text-transform:uppercase;">Poster URL</label>
+      <label style="display:block;margin-bottom:6px;font-size:15px;color:#64748b;letter-spacing:.06em;text-transform:uppercase;">Poster URL</label>
       <input type="text" v-model="editingItem.poster" class="ft-input" style="width:100%;box-sizing:border-box;margin-bottom:24px;">
       <div style="display:flex;gap:8px;justify-content:flex-end;">
         <button @click="editingItem=null" class="ft-btn" style="background:rgba(255,255,255,.06);color:#94a3b8;border:1px solid rgba(255,255,255,.1);">Cancelar</button>
@@ -1962,7 +2009,7 @@
   <!-- Modal nota -->
   <div v-if="editingNoteItem" style="position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);">
     <div style="background:#0f172a;padding:28px;border-radius:14px;width:90%;max-width:400px;border:1px solid rgba(255,255,255,.1);">
-      <h2 style="margin-top:0;font-size:16px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:12px;margin-bottom:20px;color:#f1f5f9;">Nota da Série</h2>
+      <h2 style="margin-top:0;font-size:19px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:12px;margin-bottom:20px;color:#f1f5f9;">Nota da Série</h2>
       <textarea v-model="editingNoteItem.ft_extra_field" rows="4" class="ft-input" style="width:100%;box-sizing:border-box;resize:vertical;margin-bottom:20px;" placeholder="Ex: Parei no T1 Ep5..."></textarea>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
         <button @click="editingNoteItem=null" class="ft-btn" style="background:rgba(255,255,255,.06);color:#94a3b8;border:1px solid rgba(255,255,255,.1);">Cancelar</button>
@@ -2155,8 +2202,8 @@
             font-family:system-ui,-apple-system,Segoe UI,sans-serif;
             box-shadow:0 24px 60px rgba(0,0,0,.7),0 0 0 1px rgba(220,38,38,.06);`;
 
-        const codeStyle = "display:inline-block;background:rgba(255,255,255,.07);color:#e2e8f0;padding:2px 7px;border-radius:4px;font-family:monospace;font-size:11.5px;border:1px solid rgba(255,255,255,.1);";
-        const stepNumStyle = "display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:rgba(220,38,38,.25);color:#fca5a5;font-size:10px;font-weight:700;margin-right:8px;flex-shrink:0;";
+        const codeStyle = "display:inline-block;background:rgba(255,255,255,.07);color:#e2e8f0;padding:2px 7px;border-radius:4px;font-family:monospace;font-size:14.5px;border:1px solid rgba(255,255,255,.1);";
+        const stepNumStyle = "display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:rgba(220,38,38,.25);color:#fca5a5;font-size:13px;font-weight:700;margin-right:8px;flex-shrink:0;";
         const steps = [
             ['Criar KV', 'Workers &amp; Pages → KV → criar namespace.'],
             ['Criar Worker', `(Module Worker) → colar código do GitHub → Deploy.`],
@@ -2165,7 +2212,7 @@
             ['No script', `<b>Gerir APIs cloud</b> → URL do Worker + API Key gerada.`],
         ];
         const stepsHtml = steps.map((s, i) =>
-            `<li style="display:flex;align-items:flex-start;margin-bottom:11px;font-size:12.5px;color:#cbd5e1;line-height:1.5;">
+            `<li style="display:flex;align-items:flex-start;margin-bottom:11px;font-size:15.5px;color:#cbd5e1;line-height:1.5;">
                 <span style="${stepNumStyle}">${i + 1}</span>
                 <span><b style="color:#f1f5f9;">${s[0]}</b>: ${s[1]}</span>
             </li>`
@@ -2174,25 +2221,25 @@
         const btnLink = (id, href, label, bg, border) =>
             `<a id="${id}" href="${href}" target="_blank" rel="noopener"
                 style="display:inline-flex;align-items:center;gap:7px;padding:9px 15px;background:${bg};color:#fff;
-                border:1px solid ${border};border-radius:8px;text-decoration:none;font-weight:600;font-size:12px;">${label}</a>`;
+                border:1px solid ${border};border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">${label}</a>`;
         const btnCopy = (id, label, bg, border, color) =>
             `<button id="${id}" style="padding:9px 15px;background:${bg};color:${color};border:1px solid ${border};
-                border-radius:8px;cursor:pointer;font-weight:600;font-size:12px;font-family:inherit;">${label}</button>`;
+                border-radius:8px;cursor:pointer;font-weight:600;font-size:15px;font-family:inherit;">${label}</button>`;
 
         box.innerHTML = `
         <div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(105deg,rgba(220,38,38,.1),rgba(8,12,20,0));">
             <div style="display:flex;align-items:center;gap:10px;">
                 <span style="width:7px;height:7px;border-radius:50%;background:#dc2626;box-shadow:0 0 8px rgba(220,38,38,.8);display:inline-block;"></span>
-                <span style="font-size:12.5px;font-weight:700;letter-spacing:.12em;color:#f1f5f9;">CLOUDFLARE WORKER — SETUP</span>
+                <span style="font-size:15.5px;font-weight:700;letter-spacing:.12em;color:#f1f5f9;">CLOUDFLARE WORKER — SETUP</span>
             </div>
-            <button id="ft-tut-close" style="padding:6px 14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#94a3b8;border-radius:8px;cursor:pointer;font-size:12px;">Fechar</button>
+            <button id="ft-tut-close" style="padding:6px 14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#94a3b8;border-radius:8px;cursor:pointer;font-size:15px;">Fechar</button>
         </div>
         <div style="overflow-y:auto;padding:20px;flex:1;">
             <ol style="list-style:none;margin:0 0 18px;padding:0;">${stepsHtml}</ol>
 
             <div style="background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:12px 15px;margin-bottom:18px;">
-                <div style="font-size:10.5px;color:#64748b;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;">⚙ Variáveis de ambiente opcionais (Settings → Variables)</div>
-                <div style="display:flex;flex-direction:column;gap:5px;font-size:12px;">
+                <div style="font-size:13.5px;color:#64748b;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;">⚙ Variáveis de ambiente opcionais (Settings → Variables)</div>
+                <div style="display:flex;flex-direction:column;gap:5px;font-size:15px;">
                     <div><span style="${codeStyle}">ALLOWED_PREFIXES</span> <span style="color:#64748b;">— prefixos permitidos (default já inclui</span> <span style="${codeStyle}">panda_</span><span style="color:#64748b;">)</span></div>
                     <div><span style="${codeStyle}">READ_KEY</span> <span style="color:#64748b;">— chave separada para leitura (opcional)</span></div>
                     <div><span style="${codeStyle}">ALLOWED_ORIGIN</span><span style="color:#475569;">,</span> <span style="${codeStyle}">MAX_BODY</span><span style="color:#475569;">,</span> <span style="${codeStyle}">MAX_ITEMS</span></div>
@@ -2302,22 +2349,22 @@
         }
         // Migrar api_configs
         const oldApiKey = "ft_api_configs";
-        const newApiKey = "panda_api_configs";
+        const newApiKey = "tvcine_api_configs";
         const oldApi = GM_getValue(oldApiKey, null);
         const newApi = GM_getValue(newApiKey, null);
         if (oldApi && !newApi) { GM_setValue(newApiKey, oldApi); GM_setValue(oldApiKey, "[]"); migrated++; }
         // Migrar hide/pos keys
         [
-            ["ft_hide_downloaded_v1", "panda_hide_downloaded_v1"],
-            ["ft_hide_history_v1", "panda_hide_history_v1"],
-            ["ft_ui_pos_v1", "panda_ui_pos_v1"],
-            ["ft_ui_min_v1", "panda_ui_min_v1"],
+            ["ft_hide_downloaded_v1", "tvcine_hide_downloaded_v1"],
+            ["ft_hide_history_v1", "tvcine_hide_history_v1"],
+            ["ft_ui_pos_v1", "tvcine_ui_pos_v1"],
+            ["ft_ui_min_v1", "tvcine_ui_min_v1"],
         ].forEach(([ok, nk]) => {
             const ov = GM_getValue(ok, null);
             const nv = GM_getValue(nk, null);
             if (ov !== null && nv === null) { GM_setValue(nk, ov); GM_setValue(ok, null); }
         });
-        if (migrated > 0) console.log(`[Panda+] ${migrated} chave(s) migradas de ft_* para panda_*.`);
+        if (migrated > 0) console.log(`[TVCine] ${migrated} chave(s) migradas de ft_* para panda_*.`);
     }
 
     /* =====================================================================
@@ -2561,7 +2608,7 @@
             const btn = document.createElement("button");
             btn.className = `focusable ft-detail-buttons-injected ${isMb ? 'btn-icon-web' : 'btn-icon-left-web'}`;
             btn.style.cssText = isMb
-                ? "margin-left:8px; padding:0 12px; border-radius:24px; font-weight:bold; height:40px; display:inline-flex; align-items:center; font-size:12px; transition:all 0.2s;"
+                ? "margin-left:8px; padding:0 12px; border-radius:24px; font-weight:bold; height:40px; display:inline-flex; align-items:center; font-size:15px; transition:all 0.2s;"
                 : "margin-left:12px; padding:0 24px; border-radius:24px; font-weight:bold; height:48px; display:inline-flex; align-items:center; transition:all 0.2s;";
 
             if (isDwn) { // Downloaded
@@ -2654,13 +2701,13 @@
 
             const btnSeason = document.createElement("button");
             btnSeason.className = "focusable btn-icon-left-web text-btnText02";
-            btnSeason.style.cssText = "padding:0 16px; border-radius:24px; font-weight:bold; height:32px; display:inline-flex; align-items:center; background-color:#ffa61a; color:#000; border:none; font-size:12px; cursor:pointer;";
+            btnSeason.style.cssText = "padding:0 16px; border-radius:24px; font-weight:bold; height:32px; display:inline-flex; align-items:center; background-color:#ffa61a; color:#000; border:none; font-size:15px; cursor:pointer;";
             btnSeason.innerHTML = `✅ Marcar visíveis`;
             btnSeason.title = "Marca todos os episódios listados abaixo como 'Já temos'";
 
             const btnUnmark = document.createElement("button");
             btnUnmark.className = "focusable btn-icon-left-web text-btnText02";
-            btnUnmark.style.cssText = "padding:0 16px; border-radius:24px; font-weight:bold; height:32px; display:inline-flex; align-items:center; background-color:rgba(255,166,26,0.15); color:#ffa61a; border:1px solid rgba(255,166,26,0.3); font-size:12px; cursor:pointer;";
+            btnUnmark.style.cssText = "padding:0 16px; border-radius:24px; font-weight:bold; height:32px; display:inline-flex; align-items:center; background-color:rgba(255,166,26,0.15); color:#ffa61a; border:1px solid rgba(255,166,26,0.3); font-size:15px; cursor:pointer;";
             btnUnmark.innerHTML = `❌ Desmarcar visíveis`;
             btnUnmark.title = "Remove todos os episódios listados abaixo de 'Já temos'";
 
