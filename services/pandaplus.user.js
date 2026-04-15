@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Panda+ — Gestor de Catálogo, Downloads & Sync Cloud
 // @namespace    leinad4mind.top/forum
-// @version      1.0.0
+// @version      1.6.0
 // @description  Conta e guarda filmes/séries do Panda+, sincroniza com Cloudflare Workers (multi-API), gere downloads e copiados, e apresenta uma Dashboard com filtros, posters, notas e exportação. Modifica também os links do header para incluir ?watch_more=1 e adiciona item "Destaques".
 // @author       BlackSpirits & Leinad4Mind
 // @license      MIT
@@ -19,14 +19,62 @@
 /*
  * CHANGELOG
  * ─────────────────────────────────────────────────────────────────────────────
- * v1.0.0 — Versão inicial para Panda+ (pandaplus.pt). Baseado na arquitetura
- *           do FilmTwist userscript com adaptações para:
+ * v1.0.0 (2025-04) — Versão inicial para Panda+ (pandaplus.pt)
+ *           Baseado na arquitetura do FilmTwist userscript com adaptações:
  *           • Cards: a[href^='/conteudo/'] (seletor raiz é o próprio <a>)
  *           • Poster: .thumbnail { background-image: url(...) }
  *           • Título: atributo alt= no elemento <a>
  *           • Header Nuxt: injectHeaderModifications() adiciona ?watch_more=1
  *             a todos os links /filters/ e injeta o item "Destaques"
  *           • Prefixo KV: panda_
+ *           • Migração automática de chaves legadas ft_ para panda_
+ *
+ * v1.1.0 (2026-04-14) — Header ?watch_more=1 + item Destaques
+ *           • Todos os links do header (/filters/*) recebem ?watch_more=1
+ *             no atributo href (tooltip correto ao passar o rato)
+ *           • Listener com capture:true intercepta o click antes do router
+ *             Nuxt/Vue e força navegação via window.location.href
+ *             (evita o router interno ignorar o href alterado no DOM)
+ *           • Item "Destaques" adicionado ao header desktop e sidebar mobile
+ *             com separador visual antes do item
+ *           • Ícone ★ estrela SVG no item Destaques (desktop + mobile)
+ *
+ * v1.2.0 (2026-04-14) — Hover overlay nos cards (Guardar / Já temos)
+ *           • Overlay gradiente translúcido aparece ao fazer hover em cada card
+ *           • Botão "💾 Guardar" marca o item como copiado temporariamente
+ *           • Botão "✅ Já temos" marca o item como transferido definitivamente
+ *           • Mesmos botões e badges já presentes nas páginas de filtros
+ *
+ * v1.3.0 (2026-04-14) — Destaques: estrela branca centrada + cor amarela
+ *           • SVG estrela com fill="white" explícito (não herda currentColor)
+ *           • Estrela inserida antes de .texts (aparece por cima do label)
+ *           • flex-direction:column no .menu-icon para empilhar ícone+texto
+ *           • Classe bg-brandInicio substituída por bg-brandPanda (amarelo)
+ *           • Mesmo tratamento aplicado ao .menu-icon-wrapper na sidebar mobile
+ *
+ * v1.4.0 (2026-04-14) — Cor da marca + título do painel flutuante
+ *           • Cor de destaque alterada de vermelho (#dc2626) para laranja
+ *             Panda (#ffa61a) em todo o painel flutuante:
+ *             gradient do header, ponto de estado, toast border, box-shadow,
+ *             stats de catálogo, border-left dos botões de ação
+ *           • Título do painel flutuante corrigido: PANDA_PLUS → PANDA+
+ *           • Botão "Gerir APIs cloud" muda de roxo para laranja (#ffa61a)
+ *
+ * v1.5.0 (2026-04-15) — Hover nos cards da homepage
+ *           • applyCardState() marca cada <a> processado com data-ft-card="1"
+ *             e garante position:relative inline
+ *           • CSS de hover alargado: [data-ft-card]:hover .ft-card-overlay e
+ *             [data-ft-card]:hover .ft-cloud-badge funcionam em qualquer
+ *             estrutura DOM (swiper-slide, .relative, layouts futuros)
+ *           • Overlay e badges visíveis na página inicial e carroséis
+ *
+ * v1.6.0 (2026-04-15) — Dashboard — identidade visual Panda+
+ *           • Título do dashboard: PANDA_PLUS → PANDA+
+ *           • Ponto de estado no header do dashboard: vermelho → laranja
+ *             (#ffa61a) com glow a combinar
+ *           • Focus dos inputs no dashboard: borda laranja em vez de vermelha
+ *           • Hover nos títulos dos cards do dashboard: laranja (#ffa61a)
+ *           • Botão "Gerir APIs cloud" no painel flutuante: roxo → laranja
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -173,7 +221,6 @@
         .ft-cloud-badge { opacity:0; transition:opacity 0.18s ease !important; }
         a.mcard:hover .ft-cloud-badge,
         .relative:hover .ft-cloud-badge { opacity:1 !important; }
-
         /* ---- Card hover overlay ---- */
         .ft-card-overlay {
             position:absolute; inset:0; z-index:200;
@@ -182,8 +229,15 @@
             opacity:0; transition:opacity .18s ease; pointer-events:none;
             border-radius:4px;
         }
+        /* Hover nos filtros (.relative wrapper) */
         .relative:hover .ft-card-overlay,
-        a.mcard:hover .ft-card-overlay { opacity:1; pointer-events:auto; }
+        a.mcard:hover .ft-card-overlay,
+        /* Hover nos swipers da homepage (sem .relative) */
+        [data-ft-card]:hover .ft-card-overlay { opacity:1; pointer-events:auto; }
+        /* Cloud badge hover */
+        .relative:hover .ft-cloud-badge,
+        a.mcard:hover .ft-cloud-badge,
+        [data-ft-card]:hover .ft-cloud-badge { opacity:1 !important; }
         .ft-card-overlay-btns {
             display:flex; gap:4px; padding:6px;
         }
@@ -826,6 +880,11 @@
         const href = normUrl(root.href || toAbsUrl(root.getAttribute("href") || ""));
         if (!href || !isRelevantFTItem(href)) return false;
 
+        // Marcar com data-ft-card para o CSS de hover funcionar em qualquer contexto DOM
+        // (filtros usam .relative, homepage usa .swiper-slide — sem classe comum)
+        root.setAttribute('data-ft-card', '1');
+        root.style.position = root.style.position || 'relative';
+
         // Estado local
         const isCatalog = cache.setCatalog.has(href);
         const isDownloaded = cache.setDownloaded.has(href);
@@ -1143,7 +1202,7 @@
         btnMark.style.flex = "1"; btnReset.style.flex = "1";
         rowCopied.append(btnMark, btnReset);
 
-        const btnAPIs = makeButton("Gerir APIs cloud", openApiManagerUI, { accent: "rgba(139,92,246,.7)", icon: "api" });
+        const btnAPIs = makeButton("Gerir APIs cloud", openApiManagerUI, { accent: "rgba(255,166,26,.7)", icon: "api" });
         btnAPIs.style.flex = "1";
 
         const rowBackup = document.createElement("div"); rowBackup.style.cssText = "display:flex;gap:7px;";
@@ -1693,7 +1752,7 @@
                 color:#e2e8f0 !important; padding:9px 13px !important; border-radius:8px !important;
                 outline:none; transition:border-color .15s; font-size:13px;
                 color-scheme:dark; }
-            .ft-input:focus { border-color:rgba(220,38,38,.5) !important; }
+            .ft-input:focus { border-color:rgba(255,166,26,.5) !important; }
             .ft-input option { background:#0f172a !important; color:#e2e8f0 !important; }
             .ft-btn { border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-weight:600;font-size:12.5px;
                 transition:opacity .15s,transform .1s; }
@@ -1716,8 +1775,8 @@
   <!-- Header -->
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;padding-bottom:18px;border-bottom:1px solid rgba(255,255,255,.08);">
     <div style="display:flex;align-items:center;gap:12px;">
-      <span style="width:9px;height:9px;border-radius:50%;background:#dc2626;box-shadow:0 0 10px rgba(220,38,38,.9);display:inline-block;"></span>
-      <span style="font-size:15px;font-weight:700;letter-spacing:.12em;color:#f1f5f9;">PANDA_PLUS</span>
+      <span style="width:9px;height:9px;border-radius:50%;background:#ffa61a;box-shadow:0 0 10px rgba(255,166,26,.9);display:inline-block;"></span>
+      <span style="font-size:15px;font-weight:700;letter-spacing:.12em;color:#f1f5f9;">PANDA+</span>
       <span style="font-size:11px;color:#94a3b8;letter-spacing:.06em;font-weight:500;">DASHBOARD</span>
     </div>
     <button @click="close" class="ft-btn" style="background:rgba(220,38,38,.15);color:#f87171;border:1px solid rgba(220,38,38,.3);">Fechar</button>
@@ -1812,7 +1871,7 @@
       <div style="padding:10px 12px;display:flex;flex-direction:column;flex-grow:1;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px;">
           <a :href="item.url" target="_blank" style="flex-grow:1;color:#e2e8f0;text-decoration:none;font-weight:600;font-size:12.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.4;"
-             @mouseenter="$event.target.style.color='#dc2626'" @mouseleave="$event.target.style.color='#e2e8f0'">{{ item.title||'Sem Título' }}</a>
+           @mouseenter="$event.target.style.color='#ffa61a'" @mouseleave="$event.target.style.color='#e2e8f0'">{{ item.title||'Sem Título' }}</a>
           <div v-if="hasWriteAccess(item)" style="display:flex;gap:2px;flex-shrink:0;">
             <button @click.prevent="openEditModal(item)" style="background:transparent;color:#475569;border:none;border-radius:4px;padding:3px;cursor:pointer;font-size:12px;transition:color .15s;" @mouseenter="$event.target.style.color='#e2e8f0'" @mouseleave="$event.target.style.color='#475569'" title="Editar">✏️</button>
             <button @click.prevent="deleteItem(item)"   style="background:transparent;color:#475569;border:none;border-radius:4px;padding:3px;cursor:pointer;font-size:12px;transition:color .15s;" @mouseenter="$event.target.style.color='#ef4444'" @mouseleave="$event.target.style.color='#475569'" title="Eliminar">🗑️</button>
