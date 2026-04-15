@@ -12,6 +12,7 @@ Arquitetura: **1 Cloudflare Worker** (backend partilhado) + **1 userscript por s
 |---|---|
 | `services/filmin.user.js` | v5.5.20 |
 | `services/filmtwist.user.js` | v1.8.2 |
+| `services/pandaplus.user.js` | v1.9.0 |
 | `services/zigzag.user.js` | v3.0.0 |
 | `services/simkl-watched.user.js` | v1.0.3 |
 | `worker/worker.js` | v1.1.0 |
@@ -28,6 +29,7 @@ media-sync/
 ├── services/
 │   ├── filmin.user.js              # Filmin.pt — catálogo, downloads, cloud sync
 │   ├── filmtwist.user.js           # FilmTwist.pt — catálogo, downloads, cloud sync
+│   ├── pandaplus.user.js           # Panda+ — catálogo, downloads, cloud sync
 │   ├── zigzag.user.js              # RTP Play Zig Zag — catálogo, cloud sync
 │   └── simkl-watched.user.js       # Todos os sites — overlay "Visto" via API Simkl
 └── README.md
@@ -43,6 +45,7 @@ media-sync/
 |---|---|---|
 | Filmin.pt | `filmin_` | `services/filmin.user.js` |
 | FilmTwist.pt | `filmtwist_` | `services/filmtwist.user.js` |
+| Panda+ | `panda_` | `services/pandaplus.user.js` |
 | Kocowa | `kocowa_` | — em breve |
 | Viki | `viki_` | — em breve |
 | Netflix | `netflix_` | — em breve |
@@ -118,7 +121,7 @@ Descomenta a secção `[vars]` no `wrangler.toml` e ajusta:
 ```toml
 [vars]
 ALLOWED_ORIGIN   = "*"
-ALLOWED_PREFIXES = "filmin_,filmtwist_,..."
+ALLOWED_PREFIXES = "filmin_,filmtwist_,zigzag_,panda_"
 MAX_BODY         = "10485760"
 MAX_ITEMS        = "100000"
 ```
