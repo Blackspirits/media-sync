@@ -34,8 +34,8 @@
 export default {
   async fetch(request, env) {
     const ALLOWED_ORIGIN = env.ALLOWED_ORIGIN || "*";
-    const MAX_BODY       = parseInt(env.MAX_BODY)  || 10 * 1024 * 1024;
-    const MAX_ITEMS      = parseInt(env.MAX_ITEMS) || 100000;
+    const MAX_BODY = parseInt(env.MAX_BODY) || 10 * 1024 * 1024;
+    const MAX_ITEMS = parseInt(env.MAX_ITEMS) || 100000;
 
     const DEFAULT_PREFIXES =
       "filmin_,filmtwist_,kocowa_,viki_,netflix_,disney_,sky_,max_,appletv_,prime_,opto_,rtp_,tvi_,zigzag_,panda_";
@@ -44,9 +44,9 @@ export default {
       .split(",").map(s => s.trim()).filter(Boolean);
 
     const corsHeaders = {
-      "Access-Control-Allow-Origin":  ALLOWED_ORIGIN,
+      "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
       "Access-Control-Allow-Headers": "Content-Type, x-api-key",
-      "Access-Control-Max-Age":       "86400",
+      "Access-Control-Max-Age": "86400",
       "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
     };
 
@@ -67,8 +67,8 @@ export default {
     async function secureCompare(a, b) {
       if (typeof a !== "string" || typeof b !== "string") return false;
       const enc = new TextEncoder();
-      const aB  = enc.encode(a);
-      const bB  = enc.encode(b);
+      const aB = enc.encode(a);
+      const bB = enc.encode(b);
       if (aB.byteLength !== bB.byteLength) return false;
       return crypto.subtle.timingSafeEqual(aB, bB);
     }
@@ -78,7 +78,7 @@ export default {
       const k = req.headers.get("x-api-key") || "";
       if (!env.READ_KEY) return secureCompare(k, env.API_KEY || "");
       return (await secureCompare(k, env.API_KEY || "")) ||
-             (await secureCompare(k, env.READ_KEY || ""));
+        (await secureCompare(k, env.READ_KEY || ""));
     };
 
     // Escrita: apenas API_KEY
@@ -95,7 +95,7 @@ export default {
       if (request.method === "GET") {
         if (!await readOK(request)) return json({ error: "Unauthorized" }, 401);
 
-        const url   = new URL(request.url);
+        const url = new URL(request.url);
         const param = url.searchParams.get("keys");
         if (!param) return json({});
 
@@ -133,7 +133,7 @@ export default {
             .filter(x => x && typeof x === "object" && typeof x.url === "string" && x.url.trim())
             .map(x => {
               const out = { ...x, url: String(x.url).trim() };
-              const ts  = Number(x.saved_at);
+              const ts = Number(x.saved_at);
               if (Number.isFinite(ts) && ts > 0 && String(x.saved_at).trim() !== "")
                 out.saved_at = Math.floor(ts);
               else delete out.saved_at;
