@@ -508,6 +508,39 @@
         setTimeout(dismiss, duration);
     }
 
+    function ftConfirm(message, title = "Confirmar") {
+        return new Promise((resolve) => {
+            const mod = document.createElement("div");
+            mod.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999999;
+                display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);`;
+            const box = document.createElement("div");
+            box.style.cssText = `background:#0a0e16;padding:28px;border-radius:14px;width:90%;max-width:380px;
+                border:1px solid rgba(255,166,26,.15);text-align:center;font-family:system-ui,sans-serif;
+                box-shadow:0 12px 40px rgba(0,0,0,.8),0 0 0 1px rgba(255,166,26,.05);`;
+            box.innerHTML = `
+                <div style="font-size:32px;margin-bottom:14px;">⚠️</div>
+                <h2 style="margin:0 0 12px;font-size:16px;color:#f1f5f9;letter-spacing:.02em;">${title}</h2>
+                <p style="margin:0 0 24px;font-size:13.5px;color:#cbd5e1;line-height:1.5;">${message}</p>
+                <div style="display:flex;gap:12px;justify-content:center;">
+                    <button id="ft-conf-no" class="focusable" style="padding:10px 20px;background:rgba(255,255,255,.06);color:#94a3b8;border:1px solid rgba(255,255,255,.1);border-radius:8px;cursor:pointer;font-weight:600;font-size:12.5px;transition:background .2s;">Cancelar</button>
+                    <button id="ft-conf-yes" class="focusable" style="padding:10px 20px;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3);border-radius:8px;cursor:pointer;font-weight:600;font-size:12.5px;transition:background .2s;">Confirmar</button>
+                </div>
+            `;
+            mod.appendChild(box);
+            document.body.appendChild(mod);
+            const btnNo = box.querySelector("#ft-conf-no");
+            const btnYes = box.querySelector("#ft-conf-yes");
+            btnNo.onmouseover = () => btnNo.style.background = "rgba(255,255,255,.1)";
+            btnNo.onmouseout = () => btnNo.style.background = "rgba(255,255,255,.06)";
+            btnYes.onmouseover = () => btnYes.style.background = "rgba(239,68,68,.25)";
+            btnYes.onmouseout = () => btnYes.style.background = "rgba(239,68,68,.15)";
+            const cleanup = (val) => { mod.remove(); resolve(val); };
+            btnNo.onclick = () => cleanup(false);
+            btnYes.onclick = () => cleanup(true);
+            mod.onclick = (e) => { if (e.target === mod) cleanup(false); };
+        });
+    }
+
     function downloadFallback(filename, content) {
         const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
         const url = URL.createObjectURL(blob);
@@ -1621,14 +1654,14 @@
                     btn.onclick = async () => {
                         const i = parseInt(btn.getAttribute("data-idx"), 10);
                         const api = configs[i];
-                        if (!confirm(`⚠️ Apagar ${label} no servidor de ${api.name}?`)) return;
+                        if (!await ftConfirm(`Apagar ${label} no servidor de ${api.name}?`, "Apagar na Nuvem")) return;
                         const res = await fetch(api.url, {
                             method: "DELETE",
                             headers: { "Content-Type": "application/json", "x-api-key": api.apiKey },
                             body: JSON.stringify({ purgeKey })
                         });
-                        if (res.ok) { alert(`Nuvem de ${api.name} (${label}) limpa!`); btn.style.display = 'none'; fetchCloudData(); }
-                        else alert(`Falha ao limpar ${api.name}.`);
+                        if (res.ok) { toast(`Nuvem de ${api.name} (${label}) limpa!`); btn.style.display = 'none'; fetchCloudData(); }
+                        else toast(`Falha ao limpar ${api.name}.`);
                     };
                 });
             };
@@ -1639,17 +1672,17 @@
                 btn.onclick = async () => {
                     const i = parseInt(btn.getAttribute("data-idx"), 10);
                     const api = configs[i];
-                    if (!confirm(`Restaurar LOCAL com dados de ${api.name}?`)) return;
+                    if (!await ftConfirm(`Restaurar LOCAL com dados de ${api.name}?`, "Restaurar Local")) return;
                     const hdrs = api.apiKey ? { "x-api-key": api.apiKey } : undefined;
                     const res = await fetch(`${api.url}?keys=${STORE_CATALOG},${STORE_DOWNLOADED}`, { headers: hdrs });
-                    if (!res.ok) { alert(`Falha: ${res.status}`); return; }
+                    if (!res.ok) { toast(`Falha: ${res.status}`); return; }
                     const data = await res.json();
                     if (data && typeof data === 'object') {
                         if (data[STORE_CATALOG]) setStored(STORE_CATALOG, data[STORE_CATALOG]);
                         if (data[STORE_DOWNLOADED]) setStored(STORE_DOWNLOADED, data[STORE_DOWNLOADED]);
                         toast(`Restauro concluído via ${api.name}.`);
                         updateStats(); highlightSavedLinks(); mod.remove();
-                    } else alert("Formato de dados inválido.");
+                    } else toast("Formato de dados inválido.");
                 };
             });
 
@@ -1660,8 +1693,8 @@
                 const k = box.querySelector("#ft-api-key").value.trim();
                 const exc = box.querySelector("#ft-api-exc-copy").checked;
                 const excH = box.querySelector("#ft-api-exc-hide").checked;
-                if (!n || !u) return alert("Nome e URL são obrigatórios.");
-                if (!u.startsWith("http")) return alert("URL deve começar por http:// ou https://");
+                if (!n || !u) return toast("Nome e URL são obrigatórios.");
+                if (!u.startsWith("http")) return toast("URL deve começar por http:// ou https://");
                 if (u.endsWith('/')) u = u.slice(0, -1);
                 if (editingIdx !== -1) {
                     configs[editingIdx] = { name: n, url: u, apiKey: k || null, excludeFromCopy: exc, excludeFromHide: excH };
@@ -2053,7 +2086,7 @@
                 };
 
                 const deleteItem = async (item) => {
-                    if (!confirm(`Apagar "${item.title || item.url}"?`)) return;
+                    if (!await ftConfirm(`Apagar "${item.title || item.url}"?`, "Apagar Item")) return;
                     [STORE_CATALOG, STORE_DOWNLOADED, STORE_DOWNLOAD_LIST].forEach(KEY => {
                         setStored(KEY, getStored(KEY).filter(u => u.url !== item.url));
                     });
