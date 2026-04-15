@@ -6,11 +6,11 @@ Arquitetura: **1 Cloudflare Worker** (backend partilhado) + **1 userscript por s
 
 ---
 
-## Versões actuais
+## Versões atuais
 
 | Script | Versão |
 |---|---|
-| `services/filmin.user.js` | v5.5.20 |
+| `services/filmin.user.js` | v5.5.27 |
 | `services/filmtwist.user.js` | v1.8.2 |
 | `services/pandaplus.user.js` | v1.9.0 |
 | `services/zigzag.user.js` | v3.0.0 |
@@ -175,7 +175,7 @@ const data = await res.json();
 
 ## Setup do Simkl Watched Overlay
 
-O script `simkl-watched.user.js` é **independente** — não precisa do Worker. Liga directamente à API do Simkl e sobrepõe um badge ✓ verde nos cards de filmes/séries já vistos.
+O script `simkl-watched.user.js` é **independente** — não precisa do Worker. Liga diretamente à API do Simkl e sobrepõe um badge ✓ verde nos cards de filmes/séries já vistos.
 
 ### 1. Criar app Simkl
 
