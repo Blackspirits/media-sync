@@ -80,7 +80,7 @@ out
 
 # Nuxt.js build / generate output
 .nuxt
-dist
+# dist is intentionally tracked — built userscript files are deliverables
 
 # Gatsby files
 .cache/

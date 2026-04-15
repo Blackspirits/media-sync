@@ -20,10 +20,8 @@ export default activeServices.map((name) => ({
         name: `__${name}Script`,
         // The metablock must live OUTSIDE the IIFE — banner is injected before it
         banner: readMetablock(`src/services/${name}.js`),
-        // "use strict" is already in the IIFE via the intro
-        intro: '"use strict";',
     },
-    // Suppress "use strict" inside the IIFE (it's in intro)
+    // Suppress "MODULE_LEVEL_DIRECTIVE" warnings from core modules
     onwarn(warning, warn) {
         if (warning.code === "MODULE_LEVEL_DIRECTIVE") return;
         warn(warning);
