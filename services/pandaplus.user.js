@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Panda+ — Gestor de Catálogo, Downloads & Sync Cloud
 // @namespace    leinad4mind.top/forum
-// @version      1.6.0
+// @version      1.8.0
 // @description  Conta e guarda filmes/séries do Panda+, sincroniza com Cloudflare Workers (multi-API), gere downloads e copiados, e apresenta uma Dashboard com filtros, posters, notas e exportação. Modifica também os links do header para incluir ?watch_more=1 e adiciona item "Destaques".
 // @author       BlackSpirits & Leinad4Mind
 // @license      MIT
@@ -75,6 +75,19 @@
  *           • Focus dos inputs no dashboard: borda laranja em vez de vermelha
  *           • Hover nos títulos dos cards do dashboard: laranja (#ffa61a)
  *           • Botão "Gerir APIs cloud" no painel flutuante: roxo → laranja
+ *
+ * v1.7.0 (2026-04-15) — Modal "APIS CLOUD" — identidade visual Panda+
+ *           • Gradient do header da modal: vermelho → laranja (#ffa61a)
+ *           • Ponto de estado e glow: vermelho → laranja
+ *           • Borda exterior da caixa (glow ring): vermelho → laranja
+ *           • accent-color das checkboxes: vermelho → laranja
+ *
+ * v1.8.0 (2026-04-15) — Melhorias de compatibilidade HTML/CSS
+ *           • Alinhamento no header: espaçamento de 16px aplicado no CSS 
+ *             do separador (.ft-destaques-sep) para não conflitar com o Nuxt/Vue
+ *           • Adicionado processamento de links "/vod/" (Episódios): agora os swipers
+ *             de episódios do índice e página inicial também integram Cloudflare,
+ *             hover overlay, badges e tracking do dashboard
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -94,8 +107,8 @@
     const UI_POS_KEY = "panda_ui_pos_v1";
     const UI_MIN_KEY = "panda_ui_min_v1";
 
-    // Selector raiz dos cards
-    const CARD_ROOT_SELECTOR = "a[href^='/conteudo/']";
+    // Selector raiz dos cards (agora inclui as páginas de episódio)
+    const CARD_ROOT_SELECTOR = "a[href^='/conteudo/'], a[href^='/vod/']";
 
     // URL base do site
     const SITE_ORIGIN = "https://pandaplus.pt";
@@ -267,7 +280,7 @@
 
         /* ---- Destaques separator ---- */
         .ft-destaques-sep {
-            width:1px; background:rgba(255,255,255,.15); margin:4px 2px;
+            width:1px; background:rgba(255,255,255,.15); margin:4px 6px 4px 16px;
             align-self:stretch; display:inline-block;
         }
         .ft-destaques-link { cursor:pointer; }
@@ -376,7 +389,9 @@
     }
 
     function isRelevantFTItem(url) {
-        return url.includes("/conteudo/");
+        if (!url) return false;
+        const s = url.toLowerCase();
+        return s.includes("/conteudo/") || s.includes("/vod/");
     }
 
     /* =====================================================================
@@ -1450,7 +1465,7 @@
         box.style.cssText = `background:#0a0e16;border:1px solid rgba(255,255,255,.09);padding:0;width:680px;max-width:95%;
             border-radius:14px;color:#e2e8f0;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;
             font-family:system-ui,-apple-system,Segoe UI,sans-serif;
-            box-shadow:0 24px 60px rgba(0,0,0,.7),0 0 0 1px rgba(220,38,38,.06);`;
+            box-shadow:0 24px 60px rgba(0,0,0,.7),0 0 0 1px rgba(255,166,26,.06);`;
 
         const iSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 7l3 3-3 3"/><path d="M8 13h8"/><rect x="2" y="3" width="20" height="18" rx="2"/>
@@ -1461,7 +1476,7 @@
         const inputCSS = `width:100%;padding:9px 12px;background:rgba(255,255,255,.04);color:#e2e8f0;
             border:1px solid rgba(255,255,255,.09);border-radius:8px;box-sizing:border-box;
             font-size:12.5px;font-family:inherit;outline:none;transition:border-color .15s;`;
-        const checkCSS = `accent-color:#dc2626;width:14px;height:14px;cursor:pointer;`;
+        const checkCSS = `accent-color:#ffa61a;width:14px;height:14px;cursor:pointer;`;
 
         const renderList = () => {
             const configs = getApiConfigs();
@@ -1507,9 +1522,9 @@
 
             box.innerHTML = `
             <!-- Header -->
-            <div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(105deg,rgba(220,38,38,.1),rgba(8,12,20,0));">
+            <div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(105deg,rgba(255,166,26,.1),rgba(8,12,20,0));">
                 <div style="display:flex;align-items:center;gap:10px;">
-                    <span style="width:7px;height:7px;border-radius:50%;background:#dc2626;box-shadow:0 0 8px rgba(220,38,38,.8);display:inline-block;"></span>
+                    <span style="width:7px;height:7px;border-radius:50%;background:#ffa61a;box-shadow:0 0 8px rgba(255,166,26,.8);display:inline-block;"></span>
                     <span style="font-size:12.5px;font-weight:700;letter-spacing:.12em;color:#f1f5f9;">APIS CLOUD</span>
                 </div>
                 <button type="button" id="ft-tut-btn" style="padding:6px 12px;background:rgba(139,92,246,.2);color:#c4b5fd;border:1px solid rgba(139,92,246,.3);border-radius:7px;font-size:11px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px;">
@@ -2280,6 +2295,7 @@
                 try { injectUI(); } catch (e) { console.error("Falha ao reinjetar UI:", e); }
             }
             try { injectHideButtons(); } catch { }
+            try { injectDetailPageButtons(); } catch { }
             try { if (_needsFullScan) { document.querySelectorAll(CARD_ROOT_SELECTOR).forEach(queueCard); _needsFullScan = false; } } catch { }
         }, AUTO_UPDATE_MS);
     }
@@ -2301,6 +2317,7 @@
                 }
             }
             try { injectHideButtons(); } catch { }
+            try { injectDetailPageButtons(); } catch { }
             if (touched) scheduleUpdate();
         });
         _observer.observe(document.body, { childList: true, subtree: true });
@@ -2314,19 +2331,19 @@
         history.pushState = function (...args) {
             const r = _ps.apply(this, args);
             _needsFullScan = true; setTimeout(scheduleUpdate, 50);
-            setTimeout(() => { try { injectHeaderModifications(); } catch { } }, 300);
+            setTimeout(() => { try { injectHeaderModifications(); injectDetailPageButtons(); } catch { } }, 300);
             return r;
         };
         const _rs = history.replaceState;
         history.replaceState = function (...args) {
             const r = _rs.apply(this, args);
             _needsFullScan = true; setTimeout(scheduleUpdate, 50);
-            setTimeout(() => { try { injectHeaderModifications(); } catch { } }, 300);
+            setTimeout(() => { try { injectHeaderModifications(); injectDetailPageButtons(); } catch { } }, 300);
             return r;
         };
         window.addEventListener("popstate", () => {
             _needsFullScan = true; setTimeout(scheduleUpdate, 50);
-            setTimeout(() => { try { injectHeaderModifications(); } catch { } }, 300);
+            setTimeout(() => { try { injectHeaderModifications(); injectDetailPageButtons(); } catch { } }, 300);
         });
     }
 
@@ -2375,7 +2392,7 @@
         // Injetar item "Destaques" no menu do header (desktop)
         const desktopMenu = document.querySelector('.header-1 .header-menu-section');
         if (desktopMenu && !desktopMenu.querySelector('.ft-destaques-link')) {
-            // Clonar o link "Início" como base estrutural
+            // Encontrar o link "Início" como base estrutural (clonar o primeiro original)
             const templateLink = desktopMenu.querySelector('a');
             const clone = templateLink?.cloneNode(true);
             if (clone) {
@@ -2473,6 +2490,97 @@
                 sidebar.appendChild(sepMb);
                 sidebar.appendChild(clone);
             }
+        }
+    }
+
+    /* =====================================================================
+       PANDA+ DETAIL PAGE BUTTONS ("JÁ TEMOS" / "GUARDAR")
+       ===================================================================== */
+
+    function injectDetailPageButtons() {
+        if (!isRelevantFTItem(window.location.pathname)) return;
+
+        const desktopContainer = document.querySelector('.details-web .buttons-web');
+        const mobileContainer = document.querySelector('.details-mobile .secondary-buttons-mobile');
+
+        if (!desktopContainer && !mobileContainer) return;
+        if (document.querySelector('.ft-detail-buttons-injected')) return;
+
+        const href = normUrl(window.location.href);
+        const cache = buildStoreCache();
+        const isDownloaded = cache.setDownloaded.has(href);
+        const isCatalog = cache.setCatalog.has(href);
+
+        const title = safeTrim(document.querySelector('.title01')?.textContent || document.querySelector('.mobileTitle01')?.textContent || document.title);
+        const posterEl = document.querySelector('.detail-header-web') || document.querySelector('.detail-header-mobile');
+        const posterMatch = posterEl?.style.backgroundImage.match(/url\(\s*["']?(.*?)["']?\s*\)/);
+        const poster = posterMatch ? posterMatch[1].replace(/["']/g, '') : "";
+
+        const createBtn = (isMb, isDwn) => {
+            const btn = document.createElement("button");
+            // Usamos background transparente (bg-btn02 original da app panda+) com os nossos overrides inline
+            btn.className = `focusable ft-detail-buttons-injected ${isMb ? 'btn-icon-web' : 'btn-icon-left-web'}`;
+            btn.style.cssText = isMb 
+                ? "margin-left:8px; padding:0 12px; border-radius:24px; font-weight:bold; height:40px; display:inline-flex; align-items:center; color:#fff; font-size:12px; border:1px solid rgba(255,255,255,0.2); background:transparent;"
+                : "margin-left:12px; padding:0 24px; border-radius:24px; font-weight:bold; height:48px; display:inline-flex; align-items:center; color:#fff; border:1px solid rgba(255,255,255,0.2); background:transparent;";
+            
+            if (isDwn) { // Downloaded
+                if (isDownloaded) {
+                    btn.innerHTML = isMb ? `❌ <span style="margin-left:4px">Não temos</span>` : `❌ <span style="margin-left:8px">Não temos</span>`;
+                    btn.style.border = "1px solid rgba(255,166,26,0.6)"; 
+                    btn.style.background = "rgba(255,166,26,0.15)";
+                } else {
+                    btn.innerHTML = isMb ? `✅ <span style="margin-left:4px">Temos</span>` : `✅ <span style="margin-left:8px">Já temos</span>`;
+                }
+            } else { // Catalog
+                if (isCatalog) {
+                    btn.innerHTML = isMb ? `✓ <span style="margin-left:4px">Retirar</span>` : `✓ <span style="margin-left:8px">Catálogo</span>`;
+                    btn.style.border = "1px solid rgba(255,255,255,0.4)";
+                } else {
+                    btn.innerHTML = isMb ? `💾 <span style="margin-left:4px">Catálogo</span>` : `💾 <span style="margin-left:8px">Catálogo</span>`;
+                }
+            }
+            
+            btn.addEventListener("click", async (e) => {
+                e.preventDefault(); e.stopPropagation();
+                if (isDwn) {
+                    const existing = getStored(STORE_DOWNLOADED);
+                    if (isDownloaded) {
+                        setStored(STORE_DOWNLOADED, existing.filter(i => i.url !== href));
+                        toast("Removido de 'Já temos'.");
+                    } else {
+                        setStored(STORE_DOWNLOADED, mergeData([...existing, { url: href, title, poster, saved_at: Date.now() }]));
+                        toast("✅ Guardado como 'Já temos'!");
+                        const cat = getStored(STORE_CATALOG);
+                        setStored(STORE_CATALOG, cat.filter(i => i.url !== href));
+                    }
+                } else {
+                    const existing = getStored(STORE_CATALOG);
+                    if (isCatalog) {
+                        setStored(STORE_CATALOG, existing.filter(i => i.url !== href));
+                        toast("Removido do catálogo.");
+                    } else {
+                        setStored(STORE_CATALOG, mergeData([...existing, { url: href, title, poster, saved_at: Date.now() }]));
+                        toast("💾 Guardado no catálogo!");
+                    }
+                }
+                await saveToCloud();
+                
+                // Forçar renderização de novos botões em vez de update simples
+                document.querySelectorAll('.ft-detail-buttons-injected').forEach(b => b.remove());
+                injectDetailPageButtons();
+                refreshAllCards(); updateStats();
+            });
+            return btn;
+        };
+
+        if (desktopContainer && !desktopContainer.querySelector('.ft-detail-buttons-injected')) {
+            desktopContainer.appendChild(createBtn(false, false)); // Catalog
+            desktopContainer.appendChild(createBtn(false, true));  // Downloaded
+        }
+        if (mobileContainer && !mobileContainer.querySelector('.ft-detail-buttons-injected')) {
+            mobileContainer.appendChild(createBtn(true, false));
+            mobileContainer.appendChild(createBtn(true, true));
         }
     }
 
