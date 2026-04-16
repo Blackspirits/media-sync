@@ -38,7 +38,7 @@ export default {
     const MAX_ITEMS = parseInt(env.MAX_ITEMS) || 100000;
 
     const DEFAULT_PREFIXES =
-      "filmin_,filmtwist_,kocowa_,viki_,netflix_,disney_,sky_,max_,appletv_,prime_,opto_,rtp_,tvi_,zigzag_,panda_,tvcine_";
+      "filmin_,filmtwist_,kocowa_,viki_,netflix_,disney_,sky_,max_,appletv_,prime_,opto_,rtp_,tvi_,zigzag_,panda_,tvcine_,meogo_";
 
     const ALLOWED_PREFIXES = (env.ALLOWED_PREFIXES || DEFAULT_PREFIXES)
       .split(",").map(s => s.trim()).filter(Boolean);
