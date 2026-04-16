@@ -10,13 +10,13 @@ Arquitetura: **1 Cloudflare Worker** (backend partilhado) + **1 userscript por s
 
 | Script | Versão |
 |---|---|
-| `services/filmin.user.js` | v5.5.27 |
-| `services/filmtwist.user.js` | v1.8.2 |
-| `services/pandaplus.user.js` | v1.9.0 |
-| `services/tvcine.user.js` | v1.0.0 |
-| `services/zigzag.user.js` | v3.0.0 |
-| `services/simkl-watched.user.js` | v1.0.3 |
-| `worker/worker.js` | v1.1.0 |
+| `dist/filmin.user.js` | v5.5.27 |
+| `dist/filmtwist.user.js` | v1.8.2 |
+| `dist/pandaplus.user.js` | v1.9.0 |
+| `dist/tvcine.user.js` | v1.9.0 |
+| `dist/zigzag.user.js` | v3.0.0 |
+| `standalone/simkl-watched.user.js` | v1.0.3 |
+| `worker/worker.js` | v1.2.0 |
 
 ---
 
@@ -27,13 +27,19 @@ media-sync/
 ├── worker/
 │   └── worker.js                   # Worker Cloudflare — backend único multi-serviço
 ├── wrangler.toml                   # Configuração de deploy (Wrangler CLI)
-├── services/
+├── src/
+│   ├── core/                       # Módulos partilhados (merge, storage, toast, ...)
+│   └── services/                   # Fonte de verdade dos userscripts (ES modules)
+├── dist/                           # Bundles IIFE gerados pelo Rollup — INSTALAR A PARTIR DAQUI
 │   ├── filmin.user.js              # Filmin.pt — catálogo, downloads, cloud sync
 │   ├── filmtwist.user.js           # FilmTwist.pt — catálogo, downloads, cloud sync
 │   ├── pandaplus.user.js           # Panda+ — catálogo, downloads, cloud sync
 │   ├── tvcine.user.js              # TVCine — catálogo, downloads, cloud sync
-│   ├── zigzag.user.js              # RTP Play Zig Zag — catálogo, cloud sync
-│   └── simkl-watched.user.js       # Todos os sites — overlay "Visto" via API Simkl
+│   └── zigzag.user.js              # RTP Play Zig Zag — catálogo, cloud sync
+├── standalone/                     # Scripts independentes (sem Worker)
+│   └── simkl-watched.user.js       # Overlay "Visto" via API Simkl (OAuth direto)
+├── wip/                            # Scripts em desenvolvimento (ainda não migrados)
+│   └── meogo.user.js               # MEO Go — por migrar para src/services/
 └── README.md
 ```
 
@@ -45,10 +51,10 @@ media-sync/
 
 | Serviço | Prefixo KV | Script |
 |---|---|---|
-| Filmin.pt | `filmin_` | `services/filmin.user.js` |
-| FilmTwist.pt | `filmtwist_` | `services/filmtwist.user.js` |
-| Panda+ | `panda_` | `services/pandaplus.user.js` |
-| TVCine | `tvcine_` | `services/tvcine.user.js` |
+| Filmin.pt | `filmin_` | `dist/filmin.user.js` |
+| FilmTwist.pt | `filmtwist_` | `dist/filmtwist.user.js` |
+| Panda+ | `panda_` | `dist/pandaplus.user.js` |
+| TVCine | `tvcine_` | `dist/tvcine.user.js` |
 | Kocowa | `kocowa_` | — em breve |
 | Viki | `viki_` | — em breve |
 | Netflix | `netflix_` | — em breve |
@@ -59,7 +65,7 @@ media-sync/
 | Prime Video | `prime_` | — em breve |
 | Opto | `opto_` | — em breve |
 | RTP Play | `rtp_` | — em breve |
-| RTP Play Zig Zag | `rtp_` ou `zigzag_` | `services/zigzag.user.js` |
+| RTP Play Zig Zag | `rtp_` ou `zigzag_` | `dist/zigzag.user.js` |
 | TVI Player | `tvi_` | — em breve |
 
 ### Script de overlay Simkl (independente, sem Worker)
@@ -143,14 +149,16 @@ O URL do Worker ficará em: `https://media-sync.<teu-subdomínio>.workers.dev`
 
 ## Protocolo da API
 
-Todos os pedidos requerem o header `x-api-key`.
+Todos os pedidos requerem o header `x-api-key`. POST e DELETE exigem `Content-Type: application/json`.
 
 | Método | Exemplo | Auth | Descrição |
 |---|---|---|---|
 | `GET` | `?keys=filmin_catalog_paid,filmin_downloaded_paid` | READ_KEY ou API_KEY | Lê as keys indicadas. **O parâmetro `?keys=` é obrigatório** — sem ele devolve `{}`. |
+| `GET` | `/list` | READ_KEY ou API_KEY | Inventário de todas as keys KV filtradas por `ALLOWED_PREFIXES`. Devolve `{ count, keys: [{ name, expiration, metadata }] }`. Útil para debugging e auditoria. |
 | `POST` | `{ "filmin_catalog_paid": [...] }` | API_KEY | Escreve/atualiza keys. Array vazio `[]` limpa a key na cloud (intencional). |
 | `DELETE` | `{ "purgeKey": "filmin_catalog_paid" }` | API_KEY | Apaga key inteira — forma recomendada para limpar dados. |
 | `DELETE` | `{ "url": "https://...", "keys": ["filmin_catalog_paid"] }` | API_KEY | Remove 1 item de N keys. |
+| `HEAD` | — | — | Responde 200 vazio. Para health checks. |
 
 > **READ_KEY vs API_KEY**: `API_KEY` dá acesso total (leitura + escrita). `READ_KEY` é opcional — se definido, permite leitura sem expor a chave de escrita. Útil para partilhar acesso de leitura com outros dispositivos.
 
@@ -164,13 +172,23 @@ const data = await res.json();
 // { "filmin_catalog_paid": [...], "filmin_downloaded_paid": [...] }
 ```
 
+### Exemplo de inventário via `/list`
+
+```js
+const res = await fetch("https://media-sync.xxx.workers.dev/list", {
+  headers: { "x-api-key": "a-tua-read-key" }
+});
+const { count, keys } = await res.json();
+// { "count": 12, "keys": [{ "name": "filmin_catalog_paid", ... }, ...] }
+```
+
 ---
 
 ## Instalar os Userscripts
 
 1. Instala a extensão [Tampermonkey](https://www.tampermonkey.net/)
-2. Abre o ficheiro `.user.js` desejado (em `services/`)
-3. Clica **Raw** no GitHub — o Tampermonkey detecta e instala automaticamente
+2. Abre o ficheiro `.user.js` desejado em `dist/` (ou `standalone/` para o Simkl)
+3. Clica **Raw** no GitHub — o Tampermonkey deteta e instala automaticamente
 4. Para scripts de catálogo: abre o site → painel no canto → **Gerir APIs cloud** → URL do Worker + API Key
 5. Para o Simkl: vê a secção abaixo
 
@@ -190,7 +208,7 @@ O script `simkl-watched.user.js` é **independente** — não precisa do Worker.
 
 ### 2. Configurar o script
 
-Abre `services/simkl-watched.user.js` e substitui na linha indicada:
+Abre `standalone/simkl-watched.user.js` e substitui na linha indicada:
 
 ```js
 const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";

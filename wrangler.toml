@@ -1,29 +1,36 @@
-name            = "media-sync"
-main            = "worker/worker.js"
+name               = "media-sync"
+main               = "worker/worker.js"
 compatibility_date = "2026-04-15"
 
-# ── Environment variables ────────────────────────────────────────────────────
-# Override any of these in the Cloudflare dashboard or in a local .dev.vars
-# file (never commit .dev.vars — it contains secrets).
+# Deploy em *.workers.dev. Muda para false se usares apenas routes numa zona.
+workers_dev = true
+
+# ── Variáveis de ambiente ─────────────────────────────────────────────────────
+# Substitui em .dev.vars localmente (nunca commitar .dev.vars — contém segredos).
 #
-# ALLOWED_PREFIXES is intentionally NOT set here; the worker already carries
-# the full default list.  Add new prefixes directly in worker/worker.js
-# (DEFAULT_PREFIXES constant) so the source stays the single source of truth.
+# ALLOWED_ORIGIN: restringe a origem permitida. Como cada utilizador faz o seu
+# próprio deploy, podes usar "*" se preferires simplificar — o x-api-key já
+# protege os dados. Para maior rigor, usa o domínio do teu serviço principal.
+#
+# ALLOWED_PREFIXES não está definido aqui: o worker já carrega a lista completa
+# por defeito. Adiciona prefixos diretamente em worker/worker.js
+# (constante DEFAULT_PREFIXES) para manter uma única fonte de verdade.
 [vars]
 ALLOWED_ORIGIN = "*"
-# MAX_BODY  = "10485760"   # 10 MB — uncomment to override worker default
-# MAX_ITEMS = "100000"     # uncomment to override worker default
+# ALLOWED_ORIGIN = "https://www.filmin.pt"  # exemplo mais restritivo
+# MAX_BODY  = "10485760"   # 10 MB — descomenta para substituir o valor predefinido
+# MAX_ITEMS = "100000"     # descomenta para substituir o valor predefinido
 
 # ── KV namespace ─────────────────────────────────────────────────────────────
-# Run once to create:  npx wrangler kv namespace create MEDIA
-# Then replace the placeholder id below with the one printed by that command.
-# For a preview namespace (wrangler dev):
-#   npx wrangler kv namespace create MEDIA --preview
-#   and add a second [[kv_namespaces]] block with preview_id = "..."
+# Produção:  npx wrangler kv namespace create MEDIA
+# Preview:   npx wrangler kv namespace create MEDIA --preview
+# Substitui ambos os placeholders abaixo pelos ids devolvidos pelos comandos acima.
+# Sem preview_id, o `wrangler dev` bate no KV de produção — não saltar este passo.
 [[kv_namespaces]]
-binding = "MEDIA"
-id      = "REPLACE_WITH_KV_NAMESPACE_ID"
+binding    = "MEDIA"
+id         = "REPLACE_WITH_KV_NAMESPACE_ID"
+preview_id = "REPLACE_WITH_KV_PREVIEW_NAMESPACE_ID"
 
-# ── Secrets (never put values here — use the dashboard or wrangler secret) ───
-# Required:  npx wrangler secret put API_KEY
-# Optional:  npx wrangler secret put READ_KEY   (read-only key for clients)
+# ── Segredos (nunca colocar valores aqui — usar o dashboard ou wrangler secret) ─
+# Obrigatório:  npx wrangler secret put API_KEY
+# Opcional:     npx wrangler secret put READ_KEY   (chave de leitura separada)

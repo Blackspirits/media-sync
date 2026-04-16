@@ -566,8 +566,8 @@ const SIMKL_CLIENT_ID = "COLOCA_AQUI_O_SEU_CLIENT_ID";
             </div>
 
             <div style="padding:20px;">
-                <!-- Título detectado -->
-                <div style="font-size:11px;color:#64748b;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Título detectado</div>
+                <!-- Título detetado -->
+                <div style="font-size:11px;color:#64748b;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Título detetado</div>
                 <div style="font-size:14px;font-weight:600;margin-bottom:4px;">${esc(title)}</div>
                 <div style="font-size:12px;color:#64748b;margin-bottom:16px;">Ano: ${esc(year || 'desconhecido')}${currentMatch ? ` · Match atual: <span style="color:#22c55e;">${esc(currentMatch.title)} (${currentMatch.year || '?'})</span>` : ' · <span style="color:#f59e0b;">Sem match</span>'}</div>
 

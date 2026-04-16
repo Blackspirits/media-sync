@@ -14,6 +14,14 @@
  *                        MAX_BODY          (default: 10485760  = 10 MB)
  *                        MAX_ITEMS         (default: 100000)
  *
+ * v1.2.0 — Hardening + debugging:
+ *           · POST/DELETE exigem Content-Type: application/json (415 se não for);
+ *           · MAX_BODY agora verificado em bytes (UTF-8), não em caracteres UTF-16;
+ *           · Pré-check por Content-Length antes de ler o body (rejeita cedo);
+ *           · Novo endpoint GET /list — inventário de todas as keys KV (paginado);
+ *           · Método HEAD responde 200 (health checks);
+ *           · 500 já não expõe err.message (log em console.error).
+ *
  * v1.1.0 — Timing attack fix: comparação de chaves com crypto.subtle.timingSafeEqual
  *           (secureCompare). readOK/writeOK agora assíncronos. Fix saved_at: string vazia
  *           já não passa como timestamp válido (Number("") === 0 era falso positivo).
@@ -82,7 +90,7 @@ export default {
     };
 
     // Escrita: apenas API_KEY
-    const writeOK = (req) => secureCompare(req.headers.get("x-api-key") || "", env.API_KEY || "");
+    const writeOK = async (req) => secureCompare(req.headers.get("x-api-key") || "", env.API_KEY || "");
 
     const json = (data, status = 200) =>
       new Response(JSON.stringify(data), {
@@ -96,6 +104,31 @@ export default {
         if (!await readOK(request)) return json({ error: "Unauthorized" }, 401);
 
         const url = new URL(request.url);
+
+        // GET /list → inventário de todas as keys KV (metadados, sem valores)
+        // Útil para debugging e auditoria. Pagina automaticamente.
+        if (url.pathname === "/list") {
+          const keys = [];
+          let cursor;
+          let pages = 0;
+          do {
+            const page = await env.MEDIA.list({ cursor, limit: 1000 });
+            for (const k of page.keys) {
+              // Filtrar por prefixos permitidos — evita expor keys "estranhas"
+              if (!isAllowedKey(k.name)) continue;
+              keys.push({
+                name: k.name,
+                expiration: k.expiration || null,
+                metadata: k.metadata || null,
+              });
+            }
+            cursor = page.list_complete ? null : page.cursor;
+            pages++;
+            if (pages > 20) break; // sanity cap
+          } while (cursor);
+          return json({ count: keys.length, keys });
+        }
+
         const param = url.searchParams.get("keys");
         if (!param) return json({});
 
@@ -111,8 +144,19 @@ export default {
       if (request.method === "POST") {
         if (!await writeOK(request)) return json({ error: "Unauthorized" }, 401);
 
+        // Content-Type deve ser application/json (tolerante a charset)
+        const ct = (request.headers.get("Content-Type") || "").toLowerCase();
+        if (!ct.includes("application/json"))
+          return json({ error: "Content-Type must be application/json" }, 415);
+
+        // Pré-check por Content-Length (barato) — evita ler corpos enormes
+        const declaredLen = parseInt(request.headers.get("Content-Length") || "0", 10);
+        if (declaredLen > MAX_BODY) return json({ error: "Payload demasiado grande" }, 413);
+
         const raw = await request.text();
-        if (raw.length > MAX_BODY) return json({ error: "Payload demasiado grande" }, 413);
+        // Pós-check em bytes reais (UTF-8), não em caracteres UTF-16
+        if (new TextEncoder().encode(raw).byteLength > MAX_BODY)
+          return json({ error: "Payload demasiado grande" }, 413);
 
         let body;
         try { body = JSON.parse(raw); }
@@ -153,8 +197,18 @@ export default {
       if (request.method === "DELETE") {
         if (!await writeOK(request)) return json({ error: "Unauthorized" }, 401);
 
+        // DELETE com body: exigir Content-Type JSON (se houver body)
+        const ct = (request.headers.get("Content-Type") || "").toLowerCase();
+        if (ct && !ct.includes("application/json"))
+          return json({ error: "Content-Type must be application/json" }, 415);
+
+        const declaredLen = parseInt(request.headers.get("Content-Length") || "0", 10);
+        if (declaredLen > MAX_BODY) return json({ error: "Payload demasiado grande" }, 413);
+
         const rawDel = await request.text();
-        if (rawDel.length > MAX_BODY) return json({ error: "Payload demasiado grande" }, 413);
+        if (new TextEncoder().encode(rawDel).byteLength > MAX_BODY)
+          return json({ error: "Payload demasiado grande" }, 413);
+
         let body;
         try { body = JSON.parse(rawDel); } catch { body = {}; }
 
@@ -189,10 +243,18 @@ export default {
         return json({ status: "ignored_delete" });
       }
 
+      // ── HEAD ─────────────────────────────────────────────────────────────
+      // Usado por alguns clientes para health checks — devolve 200 sem body.
+      if (request.method === "HEAD") {
+        return new Response(null, { status: 200, headers: corsHeaders });
+      }
+
       return json({ error: "Method Not Allowed" }, 405);
 
     } catch (err) {
-      return json({ error: "Internal Server Error", message: err.message }, 500);
+      // Não expor err.message em produção — pode vazar detalhes internos
+      console.error("Unhandled error:", err);
+      return json({ error: "Internal Server Error" }, 500);
     }
   },
 };

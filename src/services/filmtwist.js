@@ -38,7 +38,7 @@
  * v1.4.0 — UX redesign: painel flutuante unificado com Filmin (largura 320px consistente,
  *           stats em grid 2×2 com números em destaque, botões com accent colorido + hover,
  *           ponto de cor no header). Dashboard: fundo #060c18, stat cards com ícone+cor,
- *           cloud cards, toolbar glassmorphism, cards hover suave, modais actualizados.
+ *           cloud cards, toolbar glassmorphism, cards hover suave, modais atualizados.
  * v1.3.0 — Segurança: esc() em openApiManagerUI previne XSS ao renderizar nomes de API
  *           guardados pelo utilizador (api.name já não é interpolado raw em innerHTML).
  *           Rate limit 429: sleep bloqueante de 5min substituído por 60s não bloqueante.
@@ -48,7 +48,7 @@
  *           sobrescreve dados existentes na cloud.
  * v1.1.0 — Prefixos corrigidos ft_* → filmtwist_* (evita colisão com outros serviços no
  *           mesmo KV). Migração automática de dados legacy no arranque. Tutorial Worker
- *           simplificado: link GitHub em vez de código embutido. Worker tutorial actualizado
+ *           simplificado: link GitHub em vez de código embutido. Worker tutorial atualizado
  *           para versão unificada multi-serviço (GET com auth obrigatório, ALLOWED_PREFIXES).
  * v1.0.0 — Versão inicial. Arquitectura baseada no Filmin v5.5.7:
  *           • Observer incremental (WeakSet + RAF + queueCard/_flushCards)

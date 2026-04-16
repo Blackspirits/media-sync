@@ -30,7 +30,7 @@
  *               (ícone histórico agora renderiza correctamente em ambos os contextos).
  * v5.5.26 — Consistência com FilmTwist:
  *             · Dashboard card: botão ⬇ transferido movido do poster overlay para
- *               a linha de acções (ao lado de ✏️ e 🗑️), idêntico ao FilmTwist;
+ *               a linha de ações (ao lado de ✏️ e 🗑️), idêntico ao FilmTwist;
  *             · Dashboard card: badge mediaType movido para bottom-left (evita
  *               sobreposição com botões copiar poster / abrir separador);
  *             · Dashboard card: transition:color nos botões de acção;
@@ -84,7 +84,7 @@
  * v5.5.11 — UX redesign: painel idêntico ao FilmTwist (320px, ponto de cor verde, stats
  *            em grid 2×2, botões com accent+hover). Dashboard: fundo #060c18, stat cards
  *            com ícone+cor, cloud cards refinados, toolbar glassmorphism, cards mais leves
- *            com hover no título (verde), modais actualizados.
+ *            com hover no título (verde), modais atualizados.
  *
  * v5.5.10 — Segurança: esc() em openApiManagerUI previne XSS ao renderizar nomes de API
  *            guardados pelo utilizador. Rate limit 429: sleep bloqueante de 5min substituído
@@ -129,7 +129,7 @@
  *           1. _needsFullScan declarado com `let` — sem ReferenceError em
  *              "use strict" (scan total só em navegação SPA, não em scroll).
  *           2. GM_setClipboard no dashboard usa { type:"text/plain" } —
- *              formato correcto igual ao resto do script.
+ *              formato correto igual ao resto do script.
  *           3. GETs em fetchCloudData/saveToCloud/restore incluem x-api-key
  *              opcional — workers que exigem auth para leitura já funcionam.
  *
@@ -180,9 +180,9 @@
  *           5. openImageDB() com promessa cacheada: IndexedDB já não abre uma
  *              nova ligação por cada leitura/escrita de poster.
  *           6. updateStats() no final de _flushCards(): painel de contagens
- *              actualiza em sincronia com novos cards (Gemini estava certo).
+ *              atualiza em sincronia com novos cards (Gemini estava certo).
  *
- * v5.1.0 — Correcção getStored(): GM_getValue já não é sobrescrito com "[]"
+ * v5.1.0 — Correção getStored(): GM_getValue já não é sobrescrito com "[]"
  *           quando o localStorage está vazio mas o GM tem dados (resilência
  *           a ambientes onde o localStorage pode estar bloqueado).
  *
@@ -842,7 +842,7 @@ import { createCloudSync, fetchCloudStores, saveStoresToCloud, removeUrlFromClou
                         ? await getTestedHighResPoster(poster)
                         : (poster || "https://placehold.co/280x400?text=Sem+Capa");
 
-                    // touched=true se actualizado em pelo menos 1 store — evita contar por store
+                    // touched=true se atualizado em pelo menos 1 store — evita contar por store
                     let touchedOk = false;
                     ALL_KEYS.forEach(KEY => {
                         const list = getStored(KEY), idx = list.findIndex(u => u.url === item.url);
@@ -882,7 +882,7 @@ import { createCloudSync, fetchCloudStores, saveStoresToCloud, removeUrlFromClou
     /* =====================================================================
        OBSERVER INCREMENTAL + applyCardState()
 
-       Modelo de actualização em dois níveis:
+       Modelo de atualização em dois níveis:
          • INCREMENTAL (scroll / DOM mutations)
              queueCard → _pendingCards → _flushCards() via RAF
              Processa apenas cards novos; WeakSet impede reprocessamento.
@@ -1197,7 +1197,7 @@ import { createCloudSync, fetchCloudStores, saveStoresToCloud, removeUrlFromClou
     function currentStats() { const { all, paid, free } = collectLinksFromPage(); return { all: all.length, paid: paid.length, free: free.length }; }
 
     /**
-     * Actualiza o painel de estatísticas.
+     * Atualiza o painel de estatísticas.
      * Nota: NÃO chama highlightSavedLinks() — o observer incremental trata os cards.
      * O highlight completo só acontece na init e na chegada de dados cloud.
      */

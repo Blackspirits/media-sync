@@ -16,6 +16,48 @@
 
 import { mergeData, mergeDataPreferNewest } from "./merge.js";
 
+/** Default fetch timeout (ms) and retry settings — adjustable per call. */
+const DEFAULT_TIMEOUT_MS = 15000;
+const DEFAULT_RETRIES    = 1;
+const RETRY_BACKOFF_MS   = 500;
+
+/**
+ * fetchWithRetry() com timeout via AbortController e 1 retry em erros de rede transitórios.
+ * NÃO faz retry em respostas 4xx (são erros aplicacionais, não transitórios).
+ * Faz retry em: AbortError (timeout), TypeError (falha de rede), e 5xx.
+ */
+async function fetchWithRetry(url, opts = {}, {
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    retries   = DEFAULT_RETRIES,
+} = {}) {
+    let lastErr;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        const ctrl  = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+        try {
+            const res = await fetch(url, { ...opts, signal: ctrl.signal });
+            clearTimeout(timer);
+            // 5xx é transitório — vale a pena repetir
+            if (res.status >= 500 && res.status < 600 && attempt < retries) {
+                await new Promise(r => setTimeout(r, RETRY_BACKOFF_MS * (attempt + 1)));
+                continue;
+            }
+            return res;
+        } catch (err) {
+            clearTimeout(timer);
+            lastErr = err;
+            // Erros de rede (TypeError) ou timeout (AbortError) — retry
+            const transient = err.name === "AbortError" || err.name === "TypeError";
+            if (transient && attempt < retries) {
+                await new Promise(r => setTimeout(r, RETRY_BACKOFF_MS * (attempt + 1)));
+                continue;
+            }
+            throw err;
+        }
+    }
+    throw lastErr;
+}
+
 /**
  * Creates an API-config manager bound to a service-specific obfuscation key
  * and GM storage key.
@@ -88,7 +130,7 @@ export async function fetchCloudStores({ configs, storeKeys, extraFieldKey = nul
     await Promise.all(configs.map(async (api) => {
         try {
             const hdrs = api.apiKey ? { "x-api-key": api.apiKey } : undefined;
-            const res  = await fetch(`${api.url}?keys=${keysParam}`, { headers: hdrs });
+            const res  = await fetchWithRetry(`${api.url}?keys=${keysParam}`, { headers: hdrs });
             if (!res.ok) return;
             const data = await res.json();
             if (!data || typeof data !== "object" || Array.isArray(data)) return;
@@ -133,7 +175,7 @@ export async function saveStoresToCloud({ configs, storeKeys, extraFieldKey = nu
                 ? [...storeKeys, extraFieldKey].join(",")
                 : storeKeys.join(",");
 
-            const getRes = await fetch(`${api.url}?keys=${keysParam}`, {
+            const getRes = await fetchWithRetry(`${api.url}?keys=${keysParam}`, {
                 headers: { "x-api-key": api.apiKey },
             });
             if (!getRes.ok) throw new Error(`GET falhou ${getRes.status}`);
@@ -152,7 +194,7 @@ export async function saveStoresToCloud({ configs, storeKeys, extraFieldKey = nu
                 ]);
             }
 
-            const res = await fetch(api.url, {
+            const res = await fetchWithRetry(api.url, {
                 method:  "POST",
                 headers: { "Content-Type": "application/json", "x-api-key": api.apiKey },
                 body:    JSON.stringify(payload),
@@ -180,7 +222,7 @@ export async function removeUrlFromCloud({ configs, storeKeys, extraFieldKey = n
     for (const api of configs) {
         if (!api.apiKey) continue;
         try {
-            const res = await fetch(api.url, {
+            const res = await fetchWithRetry(api.url, {
                 method:  "DELETE",
                 headers: { "Content-Type": "application/json", "x-api-key": api.apiKey },
                 body:    JSON.stringify({ url, keys }),

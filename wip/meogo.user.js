@@ -121,7 +121,7 @@
  *
  * v2.0.1 (2026-04-15) — Hotfix: restaurar isRelevantFTItem
  *           • isRelevantFTItem() revertida para /videoclube/detalhe que é o
- *             padrão correcto dos URLs do MEO Go (href="/videoclube/detalhe?vod=")
+ *             padrão correto dos URLs do MEO Go (href="/videoclube/detalhe?vod=")
  *           • A alteração anterior para /conteudo/ e /vod/ quebrava os overlays
  *             em todos os cards porque nenhum URL contém esses padrões
  * v2.1.0 (2026-04-15) — Fix crítico: normUrl preserva query params

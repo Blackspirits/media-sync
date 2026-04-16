@@ -10,7 +10,7 @@ Quando estiveres a trabalhar no código do `media-sync` deves seguir estas norma
 ## 1. Regras do Backend (Cloud Worker)
 - O Worker lida com múltiplos serviços baseados em **Prefixos KV**.
 - As keys seguem a nomenclatura predefinida: `{prefixo}_catalog`, `{prefixo}_downloaded`, `{prefixo}_download_list`, `{prefixo}_extra_field`.
-- Qualquer novo prefixo tem que ser adicionado à configuração global `ALLOWED_PREFIXES` (se usado), para que os requests não sejam barrados.
+- Qualquer novo prefixo tem que ser adicionado à configuração global `ALLOWED_PREFIXES` (se usado), para que os pedidos não sejam barrados.
 
 ## 2. Padrões de Frontend (Userscripts)
 - Não colocamos **NUNCA** a `API_KEY` hardcoded nos scripts que vão para o GitHub. É uma variável pessoal. O frontend deve criar sempre a sua interface em DOM ("Gerir APIs cloud") para o utilizador colar lá os seus dados (que ficam em `localStorage` com `GM_setValue`).

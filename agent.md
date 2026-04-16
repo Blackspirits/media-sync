@@ -12,7 +12,7 @@ Lê este ficheiro antes de qualquer alteração.
 - Módulos partilhados em `src/core/` — nunca duplicar lógica que já existe aí
 - Segredos nunca em código — apenas em headers (`x-api-key`)
 - Prefixos KV autorizados: definidos em `worker/worker.js` (`DEFAULT_PREFIXES`) — não em `wrangler.toml`
-- `simkl-watched.user.js` é independente do Worker e do pipeline — não tocar na sua arquitectura
+- `simkl-watched.user.js` é independente do Worker e do pipeline — não tocar na sua arquitetura
 
 ---
 
@@ -23,13 +23,14 @@ src/
   core/          ← módulos partilhados (merge, storage, image-cache, toast, icons, cloud)
   services/      ← fonte de verdade dos userscripts (ES modules com imports do core)
     filmin.js
-    filmtwist.js  ← referência de arquitectura para novos serviços
+    filmtwist.js  ← referência de arquitetura para novos serviços
     pandaplus.js
     tvcine.js
     zigzag.js
 
 dist/            ← bundles IIFE gerados pelo Rollup (não editar manualmente)
-services/        ← ficheiros legado .user.js (manter como arquivo; não são a fonte de verdade)
+standalone/      ← scripts independentes fora do pipeline (ex.: simkl-watched)
+wip/             ← scripts em desenvolvimento, ainda não migrados para src/services/
 worker/
   worker.js      ← Cloudflare Worker (único backend)
 wrangler.toml    ← configuração de deploy (KV binding, vars de ambiente)
@@ -38,7 +39,7 @@ rollup.config.js ← pipeline de build
 
 ---
 
-## Arquitectura
+## Arquitetura
 
 ### Backend — Cloudflare Worker
 
