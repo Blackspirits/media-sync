@@ -1,36 +1,150 @@
-# Media-Sync Agent Instructions
+# Media-Sync — Instruções para Agentes IA
 
-Este ficheiro funciona como um guia de instruções base (System Prompt/Context) para agentes de Inteligência Artificial que trabalhem neste repositório. O objetivo é que qualquer IA tenha de imediato num só local o contexto e as regras do projeto baseadas na arquitetura estabelecida.
+Guia de contexto e regras para qualquer agente que trabalhe neste repositório.
+Lê este ficheiro antes de qualquer alteração.
 
-## Visão Geral do Projeto
-O repositório `media-sync` consiste num sistema distribuído que sincroniza progressos de visualização (vistos), listas de downloads e catálogos para vários serviços de streaming (ex: Filmin, FilmTwist, etc.).
-- **Backend**: 1 único Cloudflare Worker atuando como router/API de acesso. Todas as informações estão alocadas em KV namespaces do Cloudflare (`MEDIA_KV`).
-- **Frontend**: 1 userscript Tampermonkey por cada serviço de streaming suportado. Servem o catálogo, gerem a persistência por localStorage antes do sync e comunicam com a layer da Cloud.
+---
 
-## Arquitetura Cloudflare KV
-O Worker gere todas as keys pelo seu prefixo específico para identificar o serviço.
-A regra é sempre: `{prefixo}_catalog`, `{prefixo}_downloaded`, `{prefixo}_download_list`, `{prefixo}_extra_field`.
-Exceções validam-se, como os casos em que as plataformas têm diferenças entre subscrição (ex: filmin: `filmin_catalog_paid` e `filmin_catalog_free`).
+## TL;DR (lê sempre primeiro)
 
-## Regras Críticas de Desenvolvimento para a IA
+- Backend: 1 Cloudflare Worker + KV namespace (`MEDIA`)
+- Frontend: 1 userscript por serviço, construído via Rollup (`src/services/ → dist/`)
+- Módulos partilhados em `src/core/` — nunca duplicar lógica que já existe aí
+- Segredos nunca em código — apenas em headers (`x-api-key`)
+- Prefixos KV autorizados: definidos em `worker/worker.js` (`DEFAULT_PREFIXES`) — não em `wrangler.toml`
+- `simkl-watched.user.js` é independente do Worker e do pipeline — não tocar na sua arquitectura
 
-1. **Nunca exponhas chaves no código.**
-   - Nunca faças hardcode de `API_KEY` ou `READ_KEY` (nem do Cloudflare, nem do Simkl) dentro dos `userscripts`. Todos os scripts devem obter, gerir e definir estes segredos armazenando via GUI no `localStorage` do utilizador.
-   - Variáveis `const API_KEY = "..."` não devem existir no repositório com valores verdadeiros.
+---
 
-2. **Como estruturar novos serviços ou alterar as KV keys:**
-   - Adicionar ou modificar o prefixo no `wrangler.toml` (na flag `ALLOWED_PREFIXES`).
-   - Adicionar o modelo de dados em `services/[nome-do-serviço].user.js`, fazendo o request com header `x-api-key`. Evitar cors garantindo origens no Worker se necessário.
+## Estrutura do repositório
 
-3. **Independência Simkl**
-   - O `simkl-watched.user.js` não acede ao Worker nem ao provedor KV. Opera por OAuth perante a plataforma Simkl e processa overlays DOM. Tudo independente!
+```
+src/
+  core/          ← módulos partilhados (merge, storage, image-cache, toast, icons, cloud)
+  services/      ← fonte de verdade dos userscripts (ES modules com imports do core)
+    filmin.js
+    filmtwist.js  ← referência de arquitectura para novos serviços
+    pandaplus.js
+    tvcine.js
+    zigzag.js
 
-4. **Tratamento do DOM em Userscripts**
-   - Os websites mudam constantemente. Utiliza `MutationObserver` sempre que dependas de conteúdo que é renderizado tardiamente (React / Vue, ex: classes dinamicas).
-   - Não uses selectors instáveis ou propensos a falhas rápidas (usa algo o mais genérico e identificativo possível, como IDs e data-attributes, ou em último caso querySelectors com paths concisos).
+dist/            ← bundles IIFE gerados pelo Rollup (não editar manualmente)
+services/        ← ficheiros legado .user.js (manter como arquivo; não são a fonte de verdade)
+worker/
+  worker.js      ← Cloudflare Worker (único backend)
+wrangler.toml    ← configuração de deploy (KV binding, vars de ambiente)
+rollup.config.js ← pipeline de build
+```
 
-## Comandos a conhecer
-- Para preparar e dar push à Cloudflare Worker: `npx wrangler deploy`
-- Pode existir a necessidade de efetuar testes locais: `npx wrangler dev`
+---
 
-**Nota Técnica para a IA:** Se te for pedido para construir um novo userscript, baseia-te na estrutura do `filmtwist.user.js` por ser o mais normalizado, e usa sempre os cabeçalhos padrão. Em caso de dúvidas, relê o ficheiro `README.md`.
+## Arquitectura
+
+### Backend — Cloudflare Worker
+
+- Ficheiro: `worker/worker.js`
+- KV binding: `MEDIA` (não `MEDIA_KV`)
+- Prefixos autorizados: constante `DEFAULT_PREFIXES` em `worker/worker.js` — **é aqui que se acrescenta um prefixo novo, não no `wrangler.toml`**
+- Autenticação: `API_KEY` (escrita) e `READ_KEY` (leitura) como Secrets no dashboard da Cloudflare
+
+### Frontend — Userscripts
+
+- Fonte de verdade: `src/services/*.js` (ES modules)
+- Output de distribuição: `dist/*.user.js` (gerado pelo Rollup — não editar)
+- Script de referência para novos serviços: `src/services/filmtwist.js`
+
+### Excepção documentada — simkl-watched
+
+`services/simkl-watched.user.js` **não usa o Worker nem o KV**. Opera por OAuth directamente com `api.simkl.com` e injeta overlays DOM no FilmTwist e no Filmin. É um script completamente independente, fora do pipeline `src → dist`. Não o migres para `src/services/` nem o incluas no Rollup.
+
+---
+
+## Esquema de KV keys
+
+| Finalidade | Formato | Exemplo (filmin) |
+|---|---|---|
+| Catálogo | `{prefix}_catalog` | `filmin_catalog` |
+| Transferidos | `{prefix}_downloaded` | `filmin_downloaded` |
+| Lista de cópias | `{prefix}_download_list` | `filmin_download_list` |
+| Campo extra (notas) | `{prefix}_extra_field` | `filmin_extra_field` |
+| Config APIs cloud | `{prefix}_api_configs` | `filmin_api_configs` |
+
+**Excepções:** O Filmin distingue catálogo pago/gratuito: `filmin_catalog_paid` e `filmin_catalog_free`.
+
+---
+
+## Regras críticas
+
+### ✅ Obrigatório
+
+- Importar de `src/core/` em vez de duplicar lógica (merge, storage, toast, cloud, icons, image-cache)
+- Enviar segredos apenas em headers HTTP (`x-api-key`)
+- Usar `MutationObserver` para DOM renderizado tardiamente (React/Vue/Nuxt)
+- Acrescentar novo prefixo ao `DEFAULT_PREFIXES` em `worker/worker.js` quando adicionares um serviço
+- Reconstruir `dist/` (`npm run build`) e commitar os bundles antes de fazer merge em PR
+
+### ❌ Proibido
+
+- `const API_KEY = "valor-real"` — nunca hardcoded
+- Commitar `.env` ou `.dev.vars` com valores reais
+- `console.log` de segredos
+- Enviar segredos em querystring (`?api_key=...`)
+- Editar ficheiros em `dist/` manualmente
+- Duplicar funções que já existem em `src/core/`
+
+### ⚠️ Atenção
+
+- `ALLOWED_ORIGIN = "*"` é permissivo — em produção restringir por domínio no dashboard ou em bloco `[env]` do `wrangler.toml`
+- Seletores DOM: preferir `data-*` > IDs estáveis > ARIA roles > texto visível (último recurso)
+- `dist/` está versionado — o CI verifica que está em sync com `src/` em cada PR
+
+---
+
+## Como adicionar um novo serviço
+
+1. Escolher prefixo (minúsculas, underscore, ex: `novosite_`)
+2. Acrescentar prefixo ao `DEFAULT_PREFIXES` em `worker/worker.js`
+3. Copiar `src/services/filmtwist.js` → `src/services/novosite.js`
+4. Ajustar: metablock `@match`, constantes de store, `CARD_ROOT_SELECTOR`, `createImageCache("novosite_img_cache_db")`, `createCloudSync({ obfKey, storeApiConfigsKey })`
+5. Acrescentar `"novosite"` ao array `SERVICES` em `rollup.config.js`
+6. Acrescentar `"build:novosite": "rollup -c --environment SERVICE:novosite"` ao `package.json`
+7. Correr `npm run build` e commitar `src/services/novosite.js` + `dist/novosite.user.js`
+8. Deploy do Worker se o prefixo for novo: `npx wrangler deploy`
+
+---
+
+## Contrato Worker ↔ userscript
+
+| Método | Endpoint | Auth | Descrição |
+|---|---|---|---|
+| GET | `?keys=k1,k2` | `x-api-key` (READ_KEY ou API_KEY) | Lê N keys em paralelo |
+| POST | `/` body `{key: [...]}` | `x-api-key` (API_KEY) | Escreve/merge arrays |
+| DELETE | `/` body `{url, keys:[...]}` | `x-api-key` (API_KEY) | Remove 1 item de N keys |
+| DELETE | `/` body `{purgeKey}` | `x-api-key` (API_KEY) | Apaga key inteira |
+
+Respostas de erro a tratar no userscript:
+- `401` / `403` → chave inválida ou em falta
+- `429` → rate limit — aguardar antes de retry
+
+---
+
+## Comandos úteis
+
+```bash
+npm run build              # constrói todos os serviços
+npm run build:filmin       # constrói só o filmin (idem para os outros)
+npx wrangler dev           # testa o Worker localmente
+npx wrangler deploy        # faz deploy do Worker para produção
+```
+
+---
+
+## Definition of Done (checklist antes de merge)
+
+- [ ] Sem segredos hardcoded nem commitados
+- [ ] Keys KV seguem o esquema definido acima
+- [ ] Novo prefixo acrescentado ao `DEFAULT_PREFIXES` do Worker
+- [ ] `npm run build` corre sem erros
+- [ ] `dist/` commitado e em sync com `src/`
+- [ ] DOM: sem seletores instáveis (ou documentados quando inevitáveis)
+- [ ] `npx wrangler dev` testado se o Worker foi alterado
