@@ -1,0 +1,33 @@
+name: PR check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "rollup.config.js"
+      - "package.json"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build all userscripts
+        run: npm run build
+
+      - name: Check dist/ is in sync with src/
+        run: |
+          git diff --name-only dist/
+          git diff --quiet dist/ || \
+            (echo "::error::dist/ is out of sync with src/ — commit the rebuilt dist/ files before merging" && exit 1)
