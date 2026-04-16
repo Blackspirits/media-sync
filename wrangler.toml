@@ -1,0 +1,29 @@
+name            = "media-sync"
+main            = "worker/worker.js"
+compatibility_date = "2026-04-15"
+
+# ── Environment variables ────────────────────────────────────────────────────
+# Override any of these in the Cloudflare dashboard or in a local .dev.vars
+# file (never commit .dev.vars — it contains secrets).
+#
+# ALLOWED_PREFIXES is intentionally NOT set here; the worker already carries
+# the full default list.  Add new prefixes directly in worker/worker.js
+# (DEFAULT_PREFIXES constant) so the source stays the single source of truth.
+[vars]
+ALLOWED_ORIGIN = "*"
+# MAX_BODY  = "10485760"   # 10 MB — uncomment to override worker default
+# MAX_ITEMS = "100000"     # uncomment to override worker default
+
+# ── KV namespace ─────────────────────────────────────────────────────────────
+# Run once to create:  npx wrangler kv namespace create MEDIA
+# Then replace the placeholder id below with the one printed by that command.
+# For a preview namespace (wrangler dev):
+#   npx wrangler kv namespace create MEDIA --preview
+#   and add a second [[kv_namespaces]] block with preview_id = "..."
+[[kv_namespaces]]
+binding = "MEDIA"
+id      = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# ── Secrets (never put values here — use the dashboard or wrangler secret) ───
+# Required:  npx wrangler secret put API_KEY
+# Optional:  npx wrangler secret put READ_KEY   (read-only key for clients)
