@@ -7,7 +7,7 @@ function readMetablock(filePath) {
     return match ? match[0] : "";
 }
 
-const SERVICES = ["filmin", "filmtwist", "pandaplus", "zigzag"];
+const SERVICES = ["filmin", "filmtwist", "pandaplus", "tvcine", "zigzag"];
 
 const targetService = process.env.SERVICE;
 const activeServices = targetService ? [targetService] : SERVICES;
