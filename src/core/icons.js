@@ -1,8 +1,8 @@
 /**
- * core/icons.js — Shared Lucide SVG icon library.
+ * core/icons.js — Biblioteca partilhada de ícones SVG Lucide.
  *
  * Source of truth: filmin.user.js
- * Used by: filmin, filmtwist, pandaplus
+ * Used by: filmin, filmtwist, pandaplus, tvcine, zigzag
  */
 
 export const ICONS = {
