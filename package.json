@@ -11,7 +11,8 @@
     "build:filmtwist": "rollup -c --environment SERVICE:filmtwist",
     "build:pandaplus": "rollup -c --environment SERVICE:pandaplus",
     "build:tvcine": "rollup -c --environment SERVICE:tvcine",
-    "build:zigzag": "rollup -c --environment SERVICE:zigzag"
+    "build:zigzag": "rollup -c --environment SERVICE:zigzag",
+    "test": "node --test src/core/*.test.js"
   },
   "engines": {
     "node": ">=18"
