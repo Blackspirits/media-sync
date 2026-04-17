@@ -14,6 +14,13 @@
  *                        MAX_BODY          (default: 10485760  = 10 MB)
  *                        MAX_ITEMS         (default: 100000)
  *
+ * v1.2.1 — Correções:
+ *           · Guard explícito quando API_KEY não está configurada (evita o
+ *             fallback "" === "" que abria o Worker a qualquer pedido sem header);
+ *           · parseInt com radix 10 em MAX_BODY / MAX_ITEMS / Content-Length;
+ *           · GET /list devolve agora { truncated: true } quando atinge o cap
+ *             de páginas em vez de truncar silenciosamente.
+ *
  * v1.2.0 — Hardening + debugging:
  *           · POST/DELETE exigem Content-Type: application/json (415 se não for);
  *           · MAX_BODY agora verificado em bytes (UTF-8), não em caracteres UTF-16;
@@ -42,8 +49,8 @@
 export default {
   async fetch(request, env) {
     const ALLOWED_ORIGIN = env.ALLOWED_ORIGIN || "*";
-    const MAX_BODY = parseInt(env.MAX_BODY) || 10 * 1024 * 1024;
-    const MAX_ITEMS = parseInt(env.MAX_ITEMS) || 100000;
+    const MAX_BODY  = parseInt(env.MAX_BODY, 10)  || 10 * 1024 * 1024;
+    const MAX_ITEMS = parseInt(env.MAX_ITEMS, 10) || 100000;
 
     const DEFAULT_PREFIXES =
       "filmin_,filmtwist_,kocowa_,viki_,netflix_,disney_,sky_,max_,appletv_,prime_,opto_,rtp_,tvi_,zigzag_,panda_,tvcine_,meogo_";
@@ -64,6 +71,16 @@ export default {
 
     if (!env?.MEDIA) {
       return new Response("KV binding MEDIA não configurado.", {
+        status: 500, headers: corsHeaders,
+      });
+    }
+
+    // Sem API_KEY definida, qualquer comparação contra "" passaria — ou seja,
+    // um pedido sem header x-api-key ganharia acesso total. Falhamos cedo com
+    // 500 para evitar que uma deploy incompleta abra o Worker ao mundo.
+    if (!env.API_KEY) {
+      console.error("API_KEY secret não está definida — Worker bloqueado.");
+      return new Response("API_KEY not configured on this Worker.", {
         status: 500, headers: corsHeaders,
       });
     }
@@ -108,9 +125,11 @@ export default {
         // GET /list → inventário de todas as keys KV (metadados, sem valores)
         // Útil para debugging e auditoria. Pagina automaticamente.
         if (url.pathname === "/list") {
+          const MAX_PAGES = 20; // cap para evitar varrer um namespace gigante
           const keys = [];
           let cursor;
           let pages = 0;
+          let truncated = false;
           do {
             const page = await env.MEDIA.list({ cursor, limit: 1000 });
             for (const k of page.keys) {
@@ -124,9 +143,9 @@ export default {
             }
             cursor = page.list_complete ? null : page.cursor;
             pages++;
-            if (pages > 20) break; // sanity cap
+            if (pages >= MAX_PAGES && cursor) { truncated = true; break; }
           } while (cursor);
-          return json({ count: keys.length, keys });
+          return json({ count: keys.length, truncated, keys });
         }
 
         const param = url.searchParams.get("keys");
@@ -151,6 +170,8 @@ export default {
 
         // Pré-check por Content-Length (barato) — evita ler corpos enormes
         const declaredLen = parseInt(request.headers.get("Content-Length") || "0", 10);
+        if (!Number.isFinite(declaredLen) || declaredLen < 0)
+          return json({ error: "Content-Length inválido" }, 400);
         if (declaredLen > MAX_BODY) return json({ error: "Payload demasiado grande" }, 413);
 
         const raw = await request.text();
@@ -203,6 +224,8 @@ export default {
           return json({ error: "Content-Type must be application/json" }, 415);
 
         const declaredLen = parseInt(request.headers.get("Content-Length") || "0", 10);
+        if (!Number.isFinite(declaredLen) || declaredLen < 0)
+          return json({ error: "Content-Length inválido" }, 400);
         if (declaredLen > MAX_BODY) return json({ error: "Payload demasiado grande" }, 413);
 
         const rawDel = await request.text();

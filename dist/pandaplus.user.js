@@ -22,8 +22,12 @@
      * core/merge.js — Pure data-manipulation helpers (no side-effects, no globals).
      *
      * Source of truth: filmin.user.js
-     * Used by: filmin, filmtwist, pandaplus, zigzag
+     * Used by: filmin, filmtwist, pandaplus, tvcine, zigzag
      */
+
+    // Tamanho mínimo para um URL de poster ser considerado válido
+    // (evita candidatos curtos como "x.png" ou caminhos incompletos).
+    const MIN_POSTER_URL_LEN = 8;
 
     const toObj = (item) => {
         if (!item) return null;
@@ -47,30 +51,32 @@
         try { return new URL(href, origin).toString(); } catch { return href; }
     };
 
-    /** Removes query string and trailing slash */
+    /** Remove query string, hash fragment e barra final */
     const normUrl = (urlStr) => {
         if (!urlStr) return "";
         const abs = toAbsUrl(urlStr);
         try {
             const u = new URL(abs);
             u.search = "";
+            u.hash   = "";
             let final = u.toString();
             if (final.endsWith("/")) final = final.slice(0, -1);
             return final;
         } catch { return abs; }
     };
 
-    /** Prefers a valid HTTP poster URL with longer path */
+    /** Prefere um URL HTTP válido de poster com caminho mais longo */
     const betterPoster = (n, o) => {
         const nn = safeTrim(n), oo = safeTrim(o);
-        if (!nn || nn.length <= 8 || !isValidHttpUrl(nn)) return oo;
+        if (!nn || nn.length <= MIN_POSTER_URL_LEN || !isValidHttpUrl(nn)) return oo;
         return nn;
     };
 
     /**
-     * Returns a betterTitle function.
-     * Pass a suffixRe to strip service-specific title suffixes (e.g., "— Filmin").
-     * Without suffixRe, falls back to choosing the longer of the two titles.
+     * Devolve uma função betterTitle.
+     * Passa uma suffixRe para remover sufixos específicos do serviço (ex.: "— Filmin").
+     * Sem suffixRe, escolhe o título mais longo entre os dois (mais descritivo tende
+     * a conter o nome original — "The Matrix Reloaded" ganha a "Matrix").
      */
     function makeBetterTitle(suffixRe = null) {
         return (n, o) => {
@@ -79,7 +85,10 @@
             if (suffixRe) { nn = nn.replace(suffixRe, "").trim(); oo = oo.replace(suffixRe, "").trim(); }
             if (!nn) return oo;
             if (!oo) return nn;
-            if (nn.length >= 3 && nn !== oo) return nn;
+            // Só substitui o antigo se o novo for válido (>= 3 chars) E pelo menos
+            // tão descritivo (comprimento >= o antigo). Evita perder "The Matrix
+            // Reloaded" para uma entrada posterior com apenas "Matrix".
+            if (nn.length >= 3 && nn.length >= oo.length) return nn;
             return oo;
         };
     }
@@ -148,13 +157,13 @@
     }
 
     /**
-     * core/storage.js — localStorage / GM_getValue persistence helpers.
+     * core/storage.js — Helpers de persistência localStorage / GM_getValue.
      *
      * Source of truth: filmin.user.js
-     * Used by: filmin, filmtwist, pandaplus, zigzag
+     * Used by: filmin, filmtwist, pandaplus, tvcine, zigzag
      *
-     * Depends on: GM_getValue / GM_setValue (injected by Tampermonkey at runtime)
-     *             mergeData from ./merge.js (used by setStored)
+     * Depende de: GM_getValue / GM_setValue (injetados pelo Tampermonkey em runtime)
+     *             mergeData de ./merge.js (usado por setStored)
      */
 
 
@@ -202,15 +211,15 @@
     }
 
     /**
-     * core/image-cache.js — IndexedDB poster cache + blob URL management.
+     * core/image-cache.js — Cache de posters em IndexedDB + gestão de blob URLs.
      *
      * Source of truth: filmin.user.js
-     * Used by: filmin, filmtwist, pandaplus, zigzag
+     * Used by: filmin, filmtwist, pandaplus, tvcine, zigzag
      *
      * Usage:
      *   const imgCache = createImageCache("filmin_img_cache_db");
      *   const blobUrl  = await imgCache.getCachedImageURL(posterUrl);
-     *   imgCache.revokeAllObjectURLs(); // call on dashboard close
+     *   imgCache.revokeAllObjectURLs(); // chamar ao fechar o dashboard
      */
 
     const IMG_STORE_NAME = "images";
@@ -259,8 +268,20 @@
                     if (!db.objectStoreNames.contains(IMG_STORE_NAME))
                         db.createObjectStore(IMG_STORE_NAME);
                 };
-                req.onsuccess = () => resolve(req.result);
+                req.onsuccess = () => {
+                    const db = req.result;
+                    // Se outro tab fizer upgrade da versão, fechamos para não
+                    // bloquear a instância nova e invalidamos a promise cacheada.
+                    db.onversionchange = () => {
+                        try { db.close(); } catch { /* ignora */ }
+                        _imgDbPromise = null;
+                    };
+                    resolve(db);
+                };
                 req.onerror   = () => { _imgDbPromise = null; reject(req.error); };
+                // Outro tab segura uma ligação aberta com versão anterior — evita
+                // pendurar indefinidamente e propaga como erro recuperável.
+                req.onblocked = () => { _imgDbPromise = null; reject(new Error("IndexedDB bloqueada por outra ligação")); };
             }).catch(err => { _imgDbPromise = null; throw err; });
             return _imgDbPromise;
         }
@@ -324,12 +345,13 @@
     }
 
     /**
-     * core/toast.js — Toast notifications and progress toasts.
+     * core/toast.js — Notificações toast e toasts de progresso.
      *
      * Source of truth: filmin.user.js
-     * Used by: filmin, filmtwist, pandaplus, zigzag
+     * Used by: filmin, filmtwist, pandaplus, tvcine, zigzag
      *
-     * Each service runs on its own domain, so a single shared namespace is fine.
+     * Cada serviço corre no seu próprio domínio, por isso um único namespace
+     * partilhado é suficiente.
      */
 
     const CSS_ID       = "bs-ms-toast-css";
@@ -347,6 +369,7 @@
         font-family:system-ui,-apple-system,sans-serif;
         border:1px solid rgba(255,255,255,.08);border-left:3px solid #00e0a4;
         box-shadow:0 8px 24px rgba(0,0,0,.6);backdrop-filter:blur(8px);
+        pointer-events:auto;
         animation:bsMsSlideIn .35s cubic-bezier(.16,1,.3,1) forwards; }
     .bs-ms-toast-success { border-left-color:#10b981 !important; }
     .bs-ms-toast-error   { border-left-color:#ef4444 !important; }
@@ -431,10 +454,10 @@
     }
 
     /**
-     * core/icons.js — Shared Lucide SVG icon library.
+     * core/icons.js — Biblioteca partilhada de ícones SVG Lucide.
      *
      * Source of truth: filmin.user.js
-     * Used by: filmin, filmtwist, pandaplus
+     * Used by: filmin, filmtwist, pandaplus, tvcine, zigzag
      */
 
     const ICONS = {
@@ -451,11 +474,15 @@
     };
 
     /**
-     * core/cloud.js — Cloud sync: encryption, API config management, and generic
-     * fetch/save/remove operations against the Cloudflare Worker backend.
+     * core/cloud.js — Sincronização cloud: ofuscação, gestão de configs API e
+     * operações genéricas fetch/save/remove contra o backend Cloudflare Worker.
+     *
+     * Nota: a "encriptação" das configs é apenas ofuscação XOR + base64 —
+     * protege contra leitura casual do GM_storage, não é um esquema criptográfico.
+     * A chave real (x-api-key) viaja sempre por header HTTPS, nunca pelo body.
      *
      * Source of truth: filmin.user.js
-     * Used by: filmin, filmtwist, pandaplus, zigzag
+     * Used by: filmin, filmtwist, pandaplus, tvcine, zigzag
      *
      * Usage:
      *   const cloud = createCloudSync({ obfKey: "FLM_SEC_KEY_24", storeApiConfigsKey: "filmin_api_configs" });
@@ -473,9 +500,28 @@
     const RETRY_BACKOFF_MS   = 500;
 
     /**
+     * Lê o header Retry-After e devolve o atraso em ms (suporta segundos e data HTTP).
+     * Devolve null se o header estiver ausente, mal formado ou indicar o passado.
+     */
+    function _parseRetryAfter(res) {
+        const raw = res.headers.get("Retry-After");
+        if (!raw) return null;
+        const secs = Number(raw);
+        if (Number.isFinite(secs) && secs >= 0) return Math.min(secs * 1000, 60000);
+        const when = Date.parse(raw);
+        if (Number.isFinite(when)) {
+            const delta = when - Date.now();
+            return delta > 0 ? Math.min(delta, 60000) : 0;
+        }
+        return null;
+    }
+
+    /**
      * fetchWithRetry() com timeout via AbortController e 1 retry em erros de rede transitórios.
-     * NÃO faz retry em respostas 4xx (são erros aplicacionais, não transitórios).
-     * Faz retry em: AbortError (timeout), TypeError (falha de rede), e 5xx.
+     * NÃO faz retry em respostas 4xx (são erros aplicacionais, não transitórios),
+     * exceto em 429 (rate limit) se houver Retry-After razoável.
+     * Faz retry em: AbortError (timeout), TypeError (falha de rede), 5xx e 429.
+     * Respeita o header Retry-After quando presente.
      */
     async function fetchWithRetry(url, opts = {}, {
         timeoutMs = DEFAULT_TIMEOUT_MS,
@@ -488,9 +534,12 @@
             try {
                 const res = await fetch(url, { ...opts, signal: ctrl.signal });
                 clearTimeout(timer);
-                // 5xx é transitório — vale a pena repetir
-                if (res.status >= 500 && res.status < 600 && attempt < retries) {
-                    await new Promise(r => setTimeout(r, RETRY_BACKOFF_MS * (attempt + 1)));
+                // 5xx e 429 (rate limit) são transitórios — vale a pena repetir.
+                const isTransient = (res.status >= 500 && res.status < 600) || res.status === 429;
+                if (isTransient && attempt < retries) {
+                    const retryAfter = _parseRetryAfter(res);
+                    const delay = retryAfter != null ? retryAfter : RETRY_BACKOFF_MS * (attempt + 1);
+                    await new Promise(r => setTimeout(r, delay));
                     continue;
                 }
                 return res;
@@ -617,22 +666,20 @@
      * @returns {{ pushed: number }}
      */
     async function saveStoresToCloud({ configs, storeKeys, extraFieldKey = null, getStored, getApiColor }) {
-        let pushed = 0;
+        const keysParam = extraFieldKey
+            ? [...storeKeys, extraFieldKey].join(",")
+            : storeKeys.join(",");
 
-        for (const api of configs) {
-            if (!api.apiKey) continue;
+        const results = await Promise.all(configs.map(async (api) => {
+            if (!api.apiKey) return false;
             try {
-                const keysParam = extraFieldKey
-                    ? [...storeKeys, extraFieldKey].join(",")
-                    : storeKeys.join(",");
-
                 const getRes = await fetchWithRetry(`${api.url}?keys=${keysParam}`, {
                     headers: { "x-api-key": api.apiKey },
                 });
                 if (!getRes.ok) throw new Error(`GET falhou ${getRes.status}`);
 
                 let cloudData = {};
-                try { cloudData = await getRes.json() || {}; } catch { /* ignore bad JSON */ }
+                try { cloudData = await getRes.json() || {}; } catch { /* ignora JSON inválido */ }
 
                 const payload = {};
                 for (const key of storeKeys) {
@@ -650,14 +697,16 @@
                     headers: { "Content-Type": "application/json", "x-api-key": api.apiKey },
                     body:    JSON.stringify(payload),
                 });
-                if (res.ok) pushed++;
-                else console.warn(`Falha ao sincronizar com ${api.name} (${res.status})`);
+                if (res.ok) return true;
+                console.warn(`Falha ao sincronizar com ${api.name} (${res.status})`);
+                return false;
             } catch (err) {
                 console.error(`Falha POST para ${api.name}:`, err);
+                return false;
             }
-        }
+        }));
 
-        return { pushed };
+        return { pushed: results.filter(Boolean).length };
     }
 
     /**

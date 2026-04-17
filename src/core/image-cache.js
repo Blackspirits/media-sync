@@ -1,13 +1,13 @@
 /**
- * core/image-cache.js — IndexedDB poster cache + blob URL management.
+ * core/image-cache.js — Cache de posters em IndexedDB + gestão de blob URLs.
  *
  * Source of truth: filmin.user.js
- * Used by: filmin, filmtwist, pandaplus, zigzag
+ * Used by: filmin, filmtwist, pandaplus, tvcine, zigzag
  *
  * Usage:
  *   const imgCache = createImageCache("filmin_img_cache_db");
  *   const blobUrl  = await imgCache.getCachedImageURL(posterUrl);
- *   imgCache.revokeAllObjectURLs(); // call on dashboard close
+ *   imgCache.revokeAllObjectURLs(); // chamar ao fechar o dashboard
  */
 
 const IMG_STORE_NAME = "images";
@@ -56,8 +56,20 @@ export function createImageCache(dbName) {
                 if (!db.objectStoreNames.contains(IMG_STORE_NAME))
                     db.createObjectStore(IMG_STORE_NAME);
             };
-            req.onsuccess = () => resolve(req.result);
+            req.onsuccess = () => {
+                const db = req.result;
+                // Se outro tab fizer upgrade da versão, fechamos para não
+                // bloquear a instância nova e invalidamos a promise cacheada.
+                db.onversionchange = () => {
+                    try { db.close(); } catch { /* ignora */ }
+                    _imgDbPromise = null;
+                };
+                resolve(db);
+            };
             req.onerror   = () => { _imgDbPromise = null; reject(req.error); };
+            // Outro tab segura uma ligação aberta com versão anterior — evita
+            // pendurar indefinidamente e propaga como erro recuperável.
+            req.onblocked = () => { _imgDbPromise = null; reject(new Error("IndexedDB bloqueada por outra ligação")); };
         }).catch(err => { _imgDbPromise = null; throw err; });
         return _imgDbPromise;
     }

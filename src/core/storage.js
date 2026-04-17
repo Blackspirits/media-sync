@@ -1,11 +1,11 @@
 /**
- * core/storage.js — localStorage / GM_getValue persistence helpers.
+ * core/storage.js — Helpers de persistência localStorage / GM_getValue.
  *
  * Source of truth: filmin.user.js
- * Used by: filmin, filmtwist, pandaplus, zigzag
+ * Used by: filmin, filmtwist, pandaplus, tvcine, zigzag
  *
- * Depends on: GM_getValue / GM_setValue (injected by Tampermonkey at runtime)
- *             mergeData from ./merge.js (used by setStored)
+ * Depende de: GM_getValue / GM_setValue (injetados pelo Tampermonkey em runtime)
+ *             mergeData de ./merge.js (usado por setStored)
  */
 
 import { mergeData } from "./merge.js";

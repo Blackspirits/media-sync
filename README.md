@@ -16,7 +16,7 @@ Arquitetura: **1 Cloudflare Worker** (backend partilhado) + **1 userscript por s
 | `dist/tvcine.user.js` | v1.9.0 |
 | `dist/zigzag.user.js` | v3.0.0 |
 | `standalone/simkl-watched.user.js` | v1.0.3 |
-| `worker/worker.js` | v1.2.0 |
+| `worker/worker.js` | v1.2.1 |
 
 ---
 
@@ -55,6 +55,7 @@ media-sync/
 | FilmTwist.pt | `filmtwist_` | `dist/filmtwist.user.js` |
 | Panda+ | `panda_` | `dist/pandaplus.user.js` |
 | TVCine | `tvcine_` | `dist/tvcine.user.js` |
+| RTP Play Zig Zag | `zigzag_` | `dist/zigzag.user.js` |
 | Kocowa | `kocowa_` | — em breve |
 | Viki | `viki_` | — em breve |
 | Netflix | `netflix_` | — em breve |
@@ -65,7 +66,6 @@ media-sync/
 | Prime Video | `prime_` | — em breve |
 | Opto | `opto_` | — em breve |
 | RTP Play | `rtp_` | — em breve |
-| RTP Play Zig Zag | `rtp_` ou `zigzag_` | `dist/zigzag.user.js` |
 | TVI Player | `tvi_` | — em breve |
 
 ### Script de overlay Simkl (independente, sem Worker)
@@ -82,7 +82,7 @@ media-sync/
 
 ### 1. Pré-requisitos
 
-- Conta Cloudflare (plano gratuito chega)
+- Conta Cloudflare (o plano gratuito é suficiente)
 - [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) instalado: `npm install -g wrangler`
 - Autenticado: `wrangler login`
 
@@ -125,17 +125,23 @@ wrangler secret put READ_KEY    # chave de leitura separada (opcional)
 
 ### 5. (Opcional) Variáveis de ambiente
 
-Descomenta a secção `[vars]` no `wrangler.toml` e ajusta:
+A secção `[vars]` do `wrangler.toml` permite ajustar opções não sensíveis. O
+`ALLOWED_PREFIXES` **não é necessário definir** — o Worker já carrega a lista
+completa por omissão a partir da constante `DEFAULT_PREFIXES` em
+`worker/worker.js` (fonte única de verdade). Apenas o deves definir se
+quiseres restringir a um subconjunto:
 
 ```toml
 [vars]
 ALLOWED_ORIGIN   = "*"
-ALLOWED_PREFIXES = "filmin_,filmtwist_,zigzag_,panda_,tvcine_"
+# ALLOWED_PREFIXES = "filmin_,filmtwist_"   # opcional — restringir a um subconjunto
 MAX_BODY         = "10485760"
 MAX_ITEMS        = "100000"
 ```
 
-Para adicionar um novo serviço no futuro, basta acrescentar o prefixo aqui — sem mudar o código do Worker.
+Para adicionar um novo serviço no futuro, acrescenta o prefixo à constante
+`DEFAULT_PREFIXES` em `worker/worker.js` — isso mantém o Worker e o
+`wrangler.toml` alinhados.
 
 ### 6. Deploy
 
@@ -267,6 +273,83 @@ filmin_downloaded_paid
 filmin_downloaded_free
 filmin_download_list
 filmin_extra_field
+```
+
+---
+
+## Troubleshooting
+
+Problemas comuns e como resolvê-los.
+
+### O Worker devolve `API_KEY not configured on this Worker` (500)
+
+Esqueceste-te de definir o secret. Corre:
+
+```bash
+wrangler secret put API_KEY
+```
+
+O Worker recusa-se a servir pedidos enquanto a `API_KEY` não estiver definida —
+isto é intencional para evitar que uma deploy incompleta abra o backend a pedidos
+sem autenticação.
+
+### Recebo `401 Unauthorized` em todos os pedidos
+
+- Confirma que estás a enviar o header `x-api-key` (minúsculas).
+- Verifica se a chave no script corresponde à que definiste no Worker (atenção
+  a espaços em branco ao colar).
+- Se definiste uma `READ_KEY` separada, lembra-te de que só serve para `GET` —
+  `POST`/`DELETE` exigem a `API_KEY`.
+
+### Recebo `415 Unsupported Media Type` em `POST`/`DELETE`
+
+A partir da v1.2.0 o Worker exige `Content-Type: application/json` em
+requests com corpo. Se estás a testar com `curl`, adiciona `-H "Content-Type: application/json"`.
+
+### Recebo `413 Payload demasiado grande`
+
+O corpo ultrapassa os 10 MB por omissão. Podes aumentar com a variável
+`MAX_BODY` no `wrangler.toml` (em bytes) — mas convém primeiro perceber porque
+é que a lista está tão grande (poster URLs duplicadas, entradas sem merge, etc.).
+
+### CORS bloqueia o pedido do browser
+
+Por omissão `ALLOWED_ORIGIN = "*"` deve funcionar. Se restringiste a um domínio
+específico, confirma que a origem do site bate certo (esquema + host + porto),
+incluindo `https://` vs `http://`.
+
+### `KV binding MEDIA não configurado.` (500)
+
+Esqueceste-te de criar o namespace KV ou não adicionaste o `id` ao `wrangler.toml`.
+Corre `npx wrangler kv namespace create MEDIA` e cola o id devolvido.
+
+### Dados desaparecem depois de sincronizar
+
+Se o array local passou a `[]` e foi enviado, o Worker interpreta isso como
+"limpar a key" (comportamento intencional). Para evitar, verifica se o script
+está a ler o `localStorage` antes de fazer `POST` — pode haver um bloqueio de
+`localStorage` a cair no fallback vazio.
+
+### Exemplos `curl` para testar a API manualmente
+
+```bash
+# Leitura
+curl -H "x-api-key: MINHA_CHAVE" \
+  "https://media-sync.xxx.workers.dev/?keys=filmin_catalog_paid"
+
+# Escrita
+curl -X POST -H "x-api-key: MINHA_CHAVE" -H "Content-Type: application/json" \
+  -d '{"filmin_catalog_paid":[{"url":"https://filmin.pt/filme/x","title":"X"}]}' \
+  "https://media-sync.xxx.workers.dev/"
+
+# Inventário
+curl -H "x-api-key: MINHA_CHAVE" \
+  "https://media-sync.xxx.workers.dev/list"
+
+# Apagar 1 item de N keys
+curl -X DELETE -H "x-api-key: MINHA_CHAVE" -H "Content-Type: application/json" \
+  -d '{"url":"https://filmin.pt/filme/x","keys":["filmin_catalog_paid"]}' \
+  "https://media-sync.xxx.workers.dev/"
 ```
 
 ---

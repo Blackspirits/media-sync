@@ -2,8 +2,12 @@
  * core/merge.js — Pure data-manipulation helpers (no side-effects, no globals).
  *
  * Source of truth: filmin.user.js
- * Used by: filmin, filmtwist, pandaplus, zigzag
+ * Used by: filmin, filmtwist, pandaplus, tvcine, zigzag
  */
+
+// Tamanho mínimo para um URL de poster ser considerado válido
+// (evita candidatos curtos como "x.png" ou caminhos incompletos).
+const MIN_POSTER_URL_LEN = 8;
 
 export const toObj = (item) => {
     if (!item) return null;
@@ -27,30 +31,32 @@ export const toAbsUrl = (href, origin = location.origin) => {
     try { return new URL(href, origin).toString(); } catch { return href; }
 };
 
-/** Removes query string and trailing slash */
+/** Remove query string, hash fragment e barra final */
 export const normUrl = (urlStr) => {
     if (!urlStr) return "";
     const abs = toAbsUrl(urlStr);
     try {
         const u = new URL(abs);
         u.search = "";
+        u.hash   = "";
         let final = u.toString();
         if (final.endsWith("/")) final = final.slice(0, -1);
         return final;
     } catch { return abs; }
 };
 
-/** Prefers a valid HTTP poster URL with longer path */
+/** Prefere um URL HTTP válido de poster com caminho mais longo */
 export const betterPoster = (n, o) => {
     const nn = safeTrim(n), oo = safeTrim(o);
-    if (!nn || nn.length <= 8 || !isValidHttpUrl(nn)) return oo;
+    if (!nn || nn.length <= MIN_POSTER_URL_LEN || !isValidHttpUrl(nn)) return oo;
     return nn;
 };
 
 /**
- * Returns a betterTitle function.
- * Pass a suffixRe to strip service-specific title suffixes (e.g., "— Filmin").
- * Without suffixRe, falls back to choosing the longer of the two titles.
+ * Devolve uma função betterTitle.
+ * Passa uma suffixRe para remover sufixos específicos do serviço (ex.: "— Filmin").
+ * Sem suffixRe, escolhe o título mais longo entre os dois (mais descritivo tende
+ * a conter o nome original — "The Matrix Reloaded" ganha a "Matrix").
  */
 export function makeBetterTitle(suffixRe = null) {
     return (n, o) => {
@@ -59,7 +65,10 @@ export function makeBetterTitle(suffixRe = null) {
         if (suffixRe) { nn = nn.replace(suffixRe, "").trim(); oo = oo.replace(suffixRe, "").trim(); }
         if (!nn) return oo;
         if (!oo) return nn;
-        if (nn.length >= 3 && nn !== oo) return nn;
+        // Só substitui o antigo se o novo for válido (>= 3 chars) E pelo menos
+        // tão descritivo (comprimento >= o antigo). Evita perder "The Matrix
+        // Reloaded" para uma entrada posterior com apenas "Matrix".
+        if (nn.length >= 3 && nn.length >= oo.length) return nn;
         return oo;
     };
 }

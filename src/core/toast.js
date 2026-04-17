@@ -1,10 +1,11 @@
 /**
- * core/toast.js — Toast notifications and progress toasts.
+ * core/toast.js — Notificações toast e toasts de progresso.
  *
  * Source of truth: filmin.user.js
- * Used by: filmin, filmtwist, pandaplus, zigzag
+ * Used by: filmin, filmtwist, pandaplus, tvcine, zigzag
  *
- * Each service runs on its own domain, so a single shared namespace is fine.
+ * Cada serviço corre no seu próprio domínio, por isso um único namespace
+ * partilhado é suficiente.
  */
 
 const CSS_ID       = "bs-ms-toast-css";
@@ -22,6 +23,7 @@ function _injectToastCSS() {
         font-family:system-ui,-apple-system,sans-serif;
         border:1px solid rgba(255,255,255,.08);border-left:3px solid #00e0a4;
         box-shadow:0 8px 24px rgba(0,0,0,.6);backdrop-filter:blur(8px);
+        pointer-events:auto;
         animation:bsMsSlideIn .35s cubic-bezier(.16,1,.3,1) forwards; }
     .bs-ms-toast-success { border-left-color:#10b981 !important; }
     .bs-ms-toast-error   { border-left-color:#ef4444 !important; }
@@ -105,12 +107,15 @@ export function toast(msg, duration = 4000, type = "info") {
     setTimeout(dismiss, duration);
 }
 
-/** Client-side file download fallback (creates a temporary <a> element) */
+/** Fallback cliente para download de ficheiro (cria um <a> temporário) */
 export function downloadFallback(filename, content) {
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
     a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
+    // document.body pode ser null se o script correr antes de <body>
+    (document.body || document.documentElement).appendChild(a);
+    a.click();
+    a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 3000);
 }
