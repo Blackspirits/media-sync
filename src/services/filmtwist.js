@@ -64,7 +64,7 @@
 
 import { betterTitle, betterPoster, mergeData, mergeDataPreferNewest,
          safeTrim, toAbsUrl, normUrl } from "../core/merge.js";
-import { getStored, safeLSGet, safeLSSet } from "../core/storage.js";
+import { getStored, setStored as coreSetStored, safeLSGet, safeLSSet } from "../core/storage.js";
 import { createImageCache } from "../core/image-cache.js";
 import { toast, progressToast, downloadFallback } from "../core/toast.js";
 import { ICONS } from "../core/icons.js";
@@ -145,13 +145,11 @@ import { createCloudSync, fetchCloudStores, saveStoresToCloud, removeUrlFromClou
        setStored local: usa mergeDataPreferNewest para STORE_EXTRA_FIELD
        ===================================================================== */
 
-    function setStored(key, list) {
-        const jsonStr = key === STORE_EXTRA_FIELD
-            ? JSON.stringify(mergeDataPreferNewest(list))
-            : JSON.stringify(mergeData(list));
-        try { localStorage.setItem(key, jsonStr); } catch (e) { console.error("Erro localStorage:", e); }
-        GM_setValue(key, jsonStr);
-    }
+    // Wrapper sobre core/setStored — STORE_EXTRA_FIELD usa mergeDataPreferNewest (edições)
+    const setStored = (key, list) => coreSetStored(
+        key, list,
+        key === STORE_EXTRA_FIELD ? mergeDataPreferNewest : mergeData
+    );
 
     function buildStoreCache() {
         const catalog = getStored(STORE_CATALOG);

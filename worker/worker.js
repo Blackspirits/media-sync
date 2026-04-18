@@ -14,6 +14,11 @@
  *                        MAX_BODY          (default: 10485760  = 10 MB)
  *                        MAX_ITEMS         (default: 100000)
  *
+ * v1.2.2 — Fallback constant-time em secureCompare: crypto.subtle.timingSafeEqual
+ *           é extensão específica dos Cloudflare Workers. Se o runtime não a expor
+ *           (workerd local antigo, testes Node), cai num XOR manual de tempo
+ *           constante em vez de crashar.
+ *
  * v1.2.1 — Correções:
  *           · Guard explícito quando API_KEY não está configurada (evita o
  *             fallback "" === "" que abria o Worker a qualquer pedido sem header);
@@ -88,14 +93,22 @@ export default {
     const isAllowedKey = (k) =>
       typeof k === "string" && ALLOWED_PREFIXES.some(p => k.startsWith(p));
 
-    // Comparação de tempo constante — previne timing attacks
+    // Comparação de tempo constante — previne timing attacks.
+    // crypto.subtle.timingSafeEqual é extensão específica dos Cloudflare Workers
+    // (não está no standard Web Crypto). Fallback manual constant-time para runtimes
+    // que não exponham o método (ex.: workerd local mais antigo, testes Node).
     async function secureCompare(a, b) {
       if (typeof a !== "string" || typeof b !== "string") return false;
       const enc = new TextEncoder();
       const aB = enc.encode(a);
       const bB = enc.encode(b);
       if (aB.byteLength !== bB.byteLength) return false;
-      return crypto.subtle.timingSafeEqual(aB, bB);
+      if (typeof crypto?.subtle?.timingSafeEqual === "function") {
+        return crypto.subtle.timingSafeEqual(aB, bB);
+      }
+      let diff = 0;
+      for (let i = 0; i < aB.byteLength; i++) diff |= aB[i] ^ bB[i];
+      return diff === 0;
     }
 
     // Leitura: aceita READ_KEY (se definido) ou API_KEY
