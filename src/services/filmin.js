@@ -200,8 +200,8 @@
  */
 
 import { makeBetterTitle, betterPoster, mergeData, mergeDataPreferNewest,
-         toObj, safeTrim, isValidHttpUrl, toAbsUrl, normUrl } from "../core/merge.js";
-import { getStored, safeLSGet, safeLSSet } from "../core/storage.js";
+         isValidHttpUrl, toAbsUrl, normUrl } from "../core/merge.js";
+import { getStored, setStored as coreSetStored, safeLSGet, safeLSSet } from "../core/storage.js";
 import { createImageCache } from "../core/image-cache.js";
 import { toast, progressToast, downloadFallback } from "../core/toast.js";
 import { ICONS } from "../core/icons.js";
@@ -306,12 +306,8 @@ import { createCloudSync, fetchCloudStores, saveStoresToCloud, removeUrlFromClou
     // Escolhe o título mais longo e remove sufixos "— Filmin" / "ver online em Filmin"
     const betterTitle = makeBetterTitle(/\s*(-\s*Filmin|ver online\s+(em|en)\s+Filmin)[\s\S]*/i);
 
-    // setStored local usa betterTitle do Filmin para deduplicação correcta
-    function setStored(key, list) {
-        const jsonStr = JSON.stringify(mergeData(list, betterTitle));
-        try { localStorage.setItem(key, jsonStr); } catch (e) { console.error("Erro ao guardar no localStorage:", e); }
-        GM_setValue(key, jsonStr);
-    }
+    // Wrapper sobre core/setStored — passa o betterTitle do Filmin para dedup correta
+    const setStored = (key, list) => coreSetStored(key, list, (l) => mergeData(l, betterTitle));
 
     // Testa variantes de poster HD (poster_0_3) e devolve o primeiro URL válido
     async function getTestedHighResPoster(url) {

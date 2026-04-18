@@ -213,6 +213,21 @@
     }
 
     /**
+     * Escreve uma lista em localStorage + GM_setValue (dual-write atómico).
+     * Deduplica com `mergeFn(list)` antes de persistir.
+     *
+     * Por defeito usa `mergeData` (preserva saved_at mais antigo, dedup por URL).
+     * Passa `mergeDataPreferNewest` para stores de edição (ex.: notas de séries),
+     * ou uma função custom para betterTitle específico do serviço:
+     *   setStored(key, list, (l) => mergeData(l, myBetterTitle))
+     */
+    function setStored$1(key, list, mergeFn = mergeData) {
+        const jsonStr = JSON.stringify(mergeFn(list));
+        try { localStorage.setItem(key, jsonStr); } catch (e) { console.error("Erro ao guardar no localStorage:", e); }
+        GM_setValue(key, jsonStr);
+    }
+
+    /**
      * core/image-cache.js — Cache de posters em IndexedDB + gestão de blob URLs.
      *
      * Source of truth: filmin.user.js
@@ -583,6 +598,7 @@
     /**
      * Lê o header Retry-After e devolve o atraso em ms (suporta segundos e data HTTP).
      * Devolve null se o header estiver ausente, mal formado ou indicar o passado.
+     * Exportado para testes — em produção, só fetchWithRetry o usa.
      */
     function _parseRetryAfter(res) {
         const raw = res.headers.get("Retry-After");
@@ -933,12 +949,8 @@
         // Escolhe o título mais longo e remove sufixos "— Filmin" / "ver online em Filmin"
         const betterTitle = makeBetterTitle(/\s*(-\s*Filmin|ver online\s+(em|en)\s+Filmin)[\s\S]*/i);
 
-        // setStored local usa betterTitle do Filmin para deduplicação correcta
-        function setStored(key, list) {
-            const jsonStr = JSON.stringify(mergeData(list, betterTitle));
-            try { localStorage.setItem(key, jsonStr); } catch (e) { console.error("Erro ao guardar no localStorage:", e); }
-            GM_setValue(key, jsonStr);
-        }
+        // Wrapper sobre core/setStored — passa o betterTitle do Filmin para dedup correta
+        const setStored = (key, list) => setStored$1(key, list, (l) => mergeData(l, betterTitle));
 
         // Testa variantes de poster HD (poster_0_3) e devolve o primeiro URL válido
         async function getTestedHighResPoster(url) {

@@ -54,11 +54,16 @@ export function getStored(key) {
 }
 
 /**
- * Writes a list to both localStorage and GM_setValue (atomic dual-write).
- * Deduplicates via mergeData before persisting.
+ * Escreve uma lista em localStorage + GM_setValue (dual-write atómico).
+ * Deduplica com `mergeFn(list)` antes de persistir.
+ *
+ * Por defeito usa `mergeData` (preserva saved_at mais antigo, dedup por URL).
+ * Passa `mergeDataPreferNewest` para stores de edição (ex.: notas de séries),
+ * ou uma função custom para betterTitle específico do serviço:
+ *   setStored(key, list, (l) => mergeData(l, myBetterTitle))
  */
-export function setStored(key, list) {
-    const jsonStr = JSON.stringify(mergeData(list));
+export function setStored(key, list, mergeFn = mergeData) {
+    const jsonStr = JSON.stringify(mergeFn(list));
     try { localStorage.setItem(key, jsonStr); } catch (e) { console.error("Erro ao guardar no localStorage:", e); }
     GM_setValue(key, jsonStr);
 }

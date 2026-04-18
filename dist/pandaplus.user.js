@@ -211,6 +211,21 @@
     }
 
     /**
+     * Escreve uma lista em localStorage + GM_setValue (dual-write atómico).
+     * Deduplica com `mergeFn(list)` antes de persistir.
+     *
+     * Por defeito usa `mergeData` (preserva saved_at mais antigo, dedup por URL).
+     * Passa `mergeDataPreferNewest` para stores de edição (ex.: notas de séries),
+     * ou uma função custom para betterTitle específico do serviço:
+     *   setStored(key, list, (l) => mergeData(l, myBetterTitle))
+     */
+    function setStored$1(key, list, mergeFn = mergeData) {
+        const jsonStr = JSON.stringify(mergeFn(list));
+        try { localStorage.setItem(key, jsonStr); } catch (e) { console.error("Erro ao guardar no localStorage:", e); }
+        GM_setValue(key, jsonStr);
+    }
+
+    /**
      * core/image-cache.js — Cache de posters em IndexedDB + gestão de blob URLs.
      *
      * Source of truth: filmin.user.js
@@ -568,6 +583,7 @@
     /**
      * Lê o header Retry-After e devolve o atraso em ms (suporta segundos e data HTTP).
      * Devolve null se o header estiver ausente, mal formado ou indicar o passado.
+     * Exportado para testes — em produção, só fetchWithRetry o usa.
      */
     function _parseRetryAfter(res) {
         const raw = res.headers.get("Retry-After");
@@ -967,13 +983,11 @@
            setStored local: usa mergeDataPreferNewest para STORE_EXTRA_FIELD
            ===================================================================== */
 
-        function setStored(key, list) {
-            const jsonStr = key === STORE_EXTRA_FIELD
-                ? JSON.stringify(mergeDataPreferNewest(list))
-                : JSON.stringify(mergeData(list));
-            try { localStorage.setItem(key, jsonStr); } catch (e) { console.error("Erro localStorage:", e); }
-            GM_setValue(key, jsonStr);
-        }
+        // Wrapper sobre core/setStored — STORE_EXTRA_FIELD usa mergeDataPreferNewest (edições)
+        const setStored = (key, list) => setStored$1(
+            key, list,
+            key === STORE_EXTRA_FIELD ? mergeDataPreferNewest : mergeData
+        );
 
         function buildStoreCache() {
             const catalog = getStored(STORE_CATALOG);
