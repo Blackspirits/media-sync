@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         RTP Play Zig Zag — Master Manager v3
 // @namespace    leinad4mind.top/forum
-// @version      3.0.0
+// @version      3.0.1
 // @description  Dashboard, Gestão de API, Deep Scrape, Cloud Sync e muito mais.
 // @author       Leinad4Mind
 // @match        https://www.rtp.pt/play/zigzag/*
@@ -12,6 +12,8 @@
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
 // ==/UserScript==
+
+import { createCloudSync } from "../core/cloud.js";
 
     /* =====================================================================
        CONSTANTES E CONFIGURAÇÕES
@@ -30,28 +32,21 @@
     let isPendingTransferConfirm = false;
 
     /* =====================================================================
-       UTILITÁRIOS DE DADOS E ENCRIPTAÇÃO
+       CLOUD CONFIG (gestão de API keys via core/cloud.js)
        ===================================================================== */
-    function __obf(str) {
-        const key = "ZIGZAG_MASTER_KEY_2026";
-        const bytes = new TextEncoder().encode(str);
-        const kbytes = new TextEncoder().encode(key);
-        const out = new Uint8Array(bytes.length);
-        for (let i = 0; i < bytes.length; i++) out[i] = bytes[i] ^ kbytes[i % kbytes.length];
-        return btoa(String.fromCharCode(...out));
-    }
+    // Gestão de configs API partilhada com os restantes serviços.
+    // A obfKey mantém-se igual à versão anterior para preservar compatibilidade
+    // com configs já guardadas por utilizadores existentes.
+    const cloud = createCloudSync({
+        obfKey: "ZIGZAG_MASTER_KEY_2026",
+        storeApiConfigsKey: STORE_API_CONFIGS,
+    });
+    const getApiConfigs = cloud.getApiConfigs;
+    const setApiConfigs = cloud.setApiConfigs;
 
-    function __deobf(b64) {
-        try {
-            const key = "ZIGZAG_MASTER_KEY_2026";
-            const bin = atob(b64);
-            const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
-            const kbytes = new TextEncoder().encode(key);
-            const out = new Uint8Array(bytes.length);
-            for (let i = 0; i < bytes.length; i++) out[i] = bytes[i] ^ kbytes[i % kbytes.length];
-            return new TextDecoder().decode(out);
-        } catch { return b64; }
-    }
+    /* =====================================================================
+       UTILITÁRIOS DE DADOS
+       ===================================================================== */
 
     const getStored = (k) => {
         try {
@@ -132,12 +127,6 @@
     /* =====================================================================
        CLOUD SYNC
        ===================================================================== */
-    function getApiConfigs() {
-        const raw = GM_getValue(STORE_API_CONFIGS, "[]");
-        if (raw === "[]") return [];
-        try { return JSON.parse(raw.startsWith("[") ? raw : __deobf(raw)); } catch { return []; }
-    }
-
     async function saveToCloud() {
         const configs = getApiConfigs();
         let success = 0;
@@ -812,7 +801,7 @@
                 if (n && u) {
                     const newObj = { name: n, url: u, apiKey: k, noCopy: nc, noHide: nh };
                     if (isEdit) configs[editIndex] = newObj; else configs.push(newObj);
-                    GM_setValue(STORE_API_CONFIGS, __obf(JSON.stringify(configs)));
+                    setApiConfigs(configs);
                     editIndex = -1;
                     renderList();
                     fetchCloudData();
@@ -857,7 +846,7 @@
             box.querySelectorAll(".zz-api-del").forEach(b => b.onclick = () => {
                 if (confirm("Garantia: O Cloudflare Worker em si não será apagado, apagas apenas de sincronizar desta tab. Continuar?")) {
                     configs.splice(b.dataset.idx, 1);
-                    GM_setValue(STORE_API_CONFIGS, __obf(JSON.stringify(configs)));
+                    setApiConfigs(configs);
                     renderList();
                 }
             });

@@ -14,7 +14,7 @@ Arquitetura: **1 Cloudflare Worker** (backend partilhado) + **1 userscript por s
 | `dist/filmtwist.user.js` | v1.8.2 |
 | `dist/pandaplus.user.js` | v1.9.0 |
 | `dist/tvcine.user.js` | v1.9.0 |
-| `dist/zigzag.user.js` | v3.0.0 |
+| `dist/zigzag.user.js` | v3.0.1 |
 | `standalone/simkl-watched.user.js` | v1.0.3 |
 | `worker/worker.js` | v1.2.1 |
 
