@@ -107,10 +107,11 @@ rollup.config.js ← pipeline de build
 2. Acrescentar prefixo ao `DEFAULT_PREFIXES` em `worker/worker.js`
 3. Copiar `src/services/filmtwist.js` → `src/services/novosite.js`
 4. Ajustar: metablock `@match`, constantes de store, `CARD_ROOT_SELECTOR`, `createImageCache("novosite_img_cache_db")`, `createCloudSync({ obfKey, storeApiConfigsKey })`
-5. Acrescentar `"novosite"` ao array `SERVICES` em `rollup.config.js`
-6. Acrescentar `"build:novosite": "rollup -c --environment SERVICE:novosite"` ao `package.json`
-7. Correr `npm run build` e commitar `src/services/novosite.js` + `dist/novosite.user.js`
-8. Deploy do Worker se o prefixo for novo: `npx wrangler deploy`
+5. (Opcional) Acrescentar `"build:novosite": "rollup -c --environment SERVICE:novosite"` ao `package.json` — útil para correr build de 1 só serviço
+6. Correr `npm run build` e commitar `src/services/novosite.js` + `dist/novosite.user.js`
+7. Deploy do Worker se o prefixo for novo: `npx wrangler deploy`
+
+> O `rollup.config.js` faz auto-descoberta de `src/services/*.js` (exceto `*.test.js`), logo não precisas de editar o rollup para adicionar um serviço.
 
 ---
 
