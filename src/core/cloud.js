@@ -28,8 +28,9 @@ const RETRY_BACKOFF_MS   = 500;
 /**
  * Lê o header Retry-After e devolve o atraso em ms (suporta segundos e data HTTP).
  * Devolve null se o header estiver ausente, mal formado ou indicar o passado.
+ * Exportado para testes — em produção, só fetchWithRetry o usa.
  */
-function _parseRetryAfter(res) {
+export function _parseRetryAfter(res) {
     const raw = res.headers.get("Retry-After");
     if (!raw) return null;
     const secs = Number(raw);

@@ -100,7 +100,7 @@
  */
 
 import { betterTitle, betterPoster, mergeData, mergeDataPreferNewest,
-         toObj, safeTrim, isValidHttpUrl, toAbsUrl, normUrl } from "../core/merge.js";
+         safeTrim, toAbsUrl, normUrl } from "../core/merge.js";
 import { getStored, safeLSGet, safeLSSet } from "../core/storage.js";
 import { createImageCache } from "../core/image-cache.js";
 import { toast, progressToast, downloadFallback } from "../core/toast.js";

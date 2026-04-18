@@ -568,6 +568,7 @@
     /**
      * Lê o header Retry-After e devolve o atraso em ms (suporta segundos e data HTTP).
      * Devolve null se o header estiver ausente, mal formado ou indicar o passado.
+     * Exportado para testes — em produção, só fetchWithRetry o usa.
      */
     function _parseRetryAfter(res) {
         const raw = res.headers.get("Retry-After");
