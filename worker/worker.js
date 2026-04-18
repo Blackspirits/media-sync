@@ -14,6 +14,16 @@
  *                        MAX_BODY          (default: 10485760  = 10 MB)
  *                        MAX_ITEMS         (default: 100000)
  *
+ * v1.2.3 — Endurecimento contra timing attacks:
+ *           · secureCompare faz SHA-256 de ambas as entradas antes de comparar —
+ *             elimina o leak de comprimento (aB.byteLength !== bB.byteLength
+ *             devolvia `false` instantaneamente, revelando tamanho da chave).
+ *           · readOK corre as duas comparações (API_KEY e READ_KEY) em paralelo
+ *             via Promise.all em vez de curto-circuito com ||, para que o tempo
+ *             total não revele qual chave correspondeu.
+ *           · CORS Access-Control-Allow-Methods inclui agora HEAD (usado
+ *             para health checks pelo frontend).
+ *
  * v1.2.2 — Fallback constant-time em secureCompare: crypto.subtle.timingSafeEqual
  *           é extensão específica dos Cloudflare Workers. Se o runtime não a expor
  *           (workerd local antigo, testes Node), cai num XOR manual de tempo
@@ -67,7 +77,7 @@ export default {
       "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
       "Access-Control-Allow-Headers": "Content-Type, x-api-key",
       "Access-Control-Max-Age": "86400",
-      "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, HEAD, POST, DELETE, OPTIONS",
     };
 
     if (request.method === "OPTIONS") {
@@ -94,15 +104,19 @@ export default {
       typeof k === "string" && ALLOWED_PREFIXES.some(p => k.startsWith(p));
 
     // Comparação de tempo constante — previne timing attacks.
-    // crypto.subtle.timingSafeEqual é extensão específica dos Cloudflare Workers
-    // (não está no standard Web Crypto). Fallback manual constant-time para runtimes
-    // que não exponham o método (ex.: workerd local mais antigo, testes Node).
+    //
+    // Faz SHA-256 de ambas as entradas antes de comparar: os digests têm
+    // sempre 32 bytes, eliminando o leak de comprimento que um atacante
+    // poderia medir via tempo de resposta. A comparação final é feita com
+    // crypto.subtle.timingSafeEqual (extensão Cloudflare Workers) ou, se
+    // indisponível, com um XOR manual de tempo constante.
     async function secureCompare(a, b) {
       if (typeof a !== "string" || typeof b !== "string") return false;
       const enc = new TextEncoder();
-      const aB = enc.encode(a);
-      const bB = enc.encode(b);
-      if (aB.byteLength !== bB.byteLength) return false;
+      const aDigest = await crypto.subtle.digest("SHA-256", enc.encode(a));
+      const bDigest = await crypto.subtle.digest("SHA-256", enc.encode(b));
+      const aB = new Uint8Array(aDigest);
+      const bB = new Uint8Array(bDigest);
       if (typeof crypto?.subtle?.timingSafeEqual === "function") {
         return crypto.subtle.timingSafeEqual(aB, bB);
       }
@@ -111,12 +125,18 @@ export default {
       return diff === 0;
     }
 
-    // Leitura: aceita READ_KEY (se definido) ou API_KEY
+    // Leitura: aceita READ_KEY (se definido) ou API_KEY.
+    // Corre ambas as comparações em paralelo (Promise.all) para o tempo total
+    // não depender de qual das chaves correspondeu — caso contrário, um atacante
+    // poderia inferir que o READ_KEY existe quando a 1.ª comparação falha e a 2.ª corre.
     const readOK = async (req) => {
       const k = req.headers.get("x-api-key") || "";
       if (!env.READ_KEY) return secureCompare(k, env.API_KEY || "");
-      return (await secureCompare(k, env.API_KEY || "")) ||
-        (await secureCompare(k, env.READ_KEY || ""));
+      const [apiMatch, readMatch] = await Promise.all([
+        secureCompare(k, env.API_KEY || ""),
+        secureCompare(k, env.READ_KEY || ""),
+      ]);
+      return apiMatch || readMatch;
     };
 
     // Escrita: apenas API_KEY

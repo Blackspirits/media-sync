@@ -16,7 +16,7 @@ Arquitetura: **1 Cloudflare Worker** (backend partilhado) + **1 userscript por s
 | `dist/tvcine.user.js` | v1.9.0 |
 | `dist/zigzag.user.js` | v3.0.1 |
 | `standalone/simkl-watched.user.js` | v1.0.3 |
-| `worker/worker.js` | v1.2.1 |
+| `worker/worker.js` | v1.2.3 |
 
 ---
 
