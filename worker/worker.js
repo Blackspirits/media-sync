@@ -14,6 +14,16 @@
  *                        MAX_BODY          (default: 10485760  = 10 MB)
  *                        MAX_ITEMS         (default: 100000)
  *
+ * v1.3.0 — Merge definitivo:
+ *           · Cache-Control: no-store + X-Content-Type-Options: nosniff em todas
+ *             as respostas JSON (via helper json())
+ *           · HEAD / e GET /health sem autenticação (para health checks externos)
+ *           · Rejeita array como root do body POST (Array.isArray guard)
+ *           · Mantém todo o endurecimento v1.2.x: SHA-256 antes de timingSafeEqual,
+ *             Promise.all em readOK, guard API_KEY, Content-Type obrigatório,
+ *             pré-check Content-Length, tamanho em bytes UTF-8, GET /list,
+ *             err.message não exposto
+ *
  * v1.2.3 — Endurecimento contra timing attacks:
  *           · secureCompare faz SHA-256 de ambas as entradas antes de comparar —
  *             elimina o leak de comprimento (aB.byteLength !== bB.byteLength
@@ -54,6 +64,7 @@
  *   filmin_,filmtwist_,kocowa_,viki_,netflix_,disney_,sky_,max_,appletv_,prime_,opto_,rtp_,tvi_
  *
  * PROTOCOLO:
+ *   HEAD / ou GET /health  — health check sem autenticação
  *   GET    ?keys=key1,key2  — requer x-api-key (READ_KEY ou API_KEY)
  *   POST   { key: [...] }  — requer x-api-key (API_KEY)
  *   DELETE { purgeKey }    — apaga key inteira (requer API_KEY)
@@ -79,6 +90,26 @@ export default {
       "Access-Control-Max-Age": "86400",
       "Access-Control-Allow-Methods": "GET, HEAD, POST, DELETE, OPTIONS",
     };
+
+    const json = (data, status = 200) =>
+      new Response(JSON.stringify(data), {
+        status,
+        headers: {
+          ...corsHeaders,
+          "Content-Type":           "application/json",
+          "Cache-Control":          "no-store",          // nunca cachear dados privados
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+
+    // ── Health check — sem auth, sem KV ──────────────────────────────────
+    const pathname = new URL(request.url).pathname;
+    if (request.method === "HEAD" && pathname === "/") {
+      return new Response(null, { status: 200, headers: corsHeaders });
+    }
+    if (request.method === "GET" && pathname === "/health") {
+      return json({ status: "ok" });
+    }
 
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
@@ -141,12 +172,6 @@ export default {
 
     // Escrita: apenas API_KEY
     const writeOK = async (req) => secureCompare(req.headers.get("x-api-key") || "", env.API_KEY || "");
-
-    const json = (data, status = 200) =>
-      new Response(JSON.stringify(data), {
-        status,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
 
     try {
       // ── GET ──────────────────────────────────────────────────────────────
@@ -215,7 +240,7 @@ export default {
         let body;
         try { body = JSON.parse(raw); }
         catch { return json({ error: "JSON inválido" }, 400); }
-        if (!body || typeof body !== "object") return json({ error: "Body inválido" }, 400);
+        if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "Body inválido" }, 400);
 
         await Promise.all(Object.entries(body).map(async ([key, arr]) => {
           if (!isAllowedKey(key) || !Array.isArray(arr)) return;
@@ -297,12 +322,6 @@ export default {
         }
 
         return json({ status: "ignored_delete" });
-      }
-
-      // ── HEAD ─────────────────────────────────────────────────────────────
-      // Usado por alguns clientes para health checks — devolve 200 sem body.
-      if (request.method === "HEAD") {
-        return new Response(null, { status: 200, headers: corsHeaders });
       }
 
       return json({ error: "Method Not Allowed" }, 405);
